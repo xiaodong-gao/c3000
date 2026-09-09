@@ -37,7 +37,8 @@ struct BlobFilterParams {
     int minWidth = 5;
     int minHeight = 5;
     double maxAspectRatio = 12.0;
-    int borderMargin = 2;  // 丢弃贴着 ROI 边的伪差；0 关闭
+    int borderMargin = 2;  // 贴边长条伪差用；0 关闭。紧凑贴边黑点会保留
+    double borderStripAspect = 2.5;  // 贴边且长宽比大于此值才丢（切割/对位长条）
     int minBrightArea = 0; // >0 时亮缺陷用更大面积门限，用来丢掉小亮伪差
 };
 
@@ -50,6 +51,14 @@ struct DefectFilterParams {
     double minAbsMeanSigned = 0.0;
 };
 
+struct LargeWhiteParams {
+    bool enable = false;          // 在本颗 die 上按亮度抓大块白区（不依赖邻居）
+    double threshold = 230.0;     // 灰度下限
+    int minArea = 4000;           // 排除总线小白块
+    double minFill = 0.15;        // bbox 填充率，排除散点连成的假大块
+    double maxAspectRatio = 3.0;  // 排除细长亮条
+};
+
 struct DefectDetectParams {
     AdaptiveThresholdParams adaptive;
     SignedDiffParams signedDiff;
@@ -57,6 +66,7 @@ struct DefectDetectParams {
     MorphologicalParams morph;
     BlobFilterParams blob;
     DefectFilterParams filter;
+    LargeWhiteParams largeWhite;
 };
 
 enum class DefectPolarity { Unknown, Bright, Dark, Mixed };
@@ -135,6 +145,9 @@ std::vector<DefectCandidate> extractDefectCandidates(const cv::Mat& blobMask,
                                                      const cv::Mat& signedDifference = {},
                                                      const cv::Mat& brightMask = {},
                                                      const cv::Mat& darkMask = {});
+
+std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
+                                                      const LargeWhiteParams& params);
 
 std::vector<DefectCandidate> filterDefects(const std::vector<DefectCandidate>& candidates,
                                            const BlobFilterParams& blob,

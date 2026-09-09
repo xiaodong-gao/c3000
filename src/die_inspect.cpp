@@ -488,7 +488,49 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
         }
         if (opt.template_neighbor && opt.template_neighbor_min >= 2 &&
             static_cast<int>(refs.size()) >= 2 && neighbor_hits < opt.template_neighbor_min) {
-            pipe.candidates.clear();
+            std::vector<DefectCandidate> keep;
+            const int minBright = std::max(400, opt.defect.blob.minBrightArea);
+            for (const auto& c : pipe.candidates) {
+                if (c.polarity == DefectPolarity::Bright && c.area >= minBright) {
+                    keep.push_back(c);
+                }
+            }
+            pipe.candidates.swap(keep);
+        }
+
+        std::vector<DefectCandidate> crop_cands;
+        crop_cands.reserve(pipe.candidates.size() + 4);
+        for (DefectCandidate c : pipe.candidates) {
+            c.bbox.x += pipe.commonRoi.x;
+            c.bbox.y += pipe.commonRoi.y;
+            c.centroid.x += pipe.commonRoi.x;
+            c.centroid.y += pipe.commonRoi.y;
+            crop_cands.push_back(c);
+        }
+        if (opt.defect.largeWhite.enable) {
+            const std::vector<DefectCandidate> whites =
+                extractLargeWhiteRegions(data, opt.defect.largeWhite);
+            for (const auto& w : whites) {
+                bool overlap = false;
+                for (const auto& e : crop_cands) {
+                    if (e.polarity != DefectPolarity::Bright) {
+                        continue;
+                    }
+                    const cv::Rect hit = e.bbox & w.bbox;
+                    const int need = std::max(1, static_cast<int>(0.3 * w.bbox.area()));
+                    if (hit.area() >= need) {
+                        overlap = true;
+                        break;
+                    }
+                }
+                if (!overlap) {
+                    crop_cands.push_back(w);
+                }
+            }
+        }
+        int rec_id = 0;
+        for (auto& c : crop_cands) {
+            c.id = ++rec_id;
         }
 
         ++result.inspected;
@@ -497,26 +539,25 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
                       << "  缺陷 " << result.defects.size() << '\n';
         }
         const cv::Scalar die_color =
-            pipe.candidates.empty() ? cv::Scalar(90, 255, 0) : cv::Scalar(0, 200, 255);
+            crop_cands.empty() ? cv::Scalar(90, 255, 0) : cv::Scalar(0, 200, 255);
         cv::rectangle(overlay, crop, die_color, thickness);
 
-        const int origin_x = crop.x + pipe.commonRoi.x;
-        const int origin_y = crop.y + pipe.commonRoi.y;
+        const int origin_x = crop.x;
+        const int origin_y = crop.y;
         const int min_vis = std::max(24, thickness * 10);
         const int mark_r = std::max(8, thickness * 4);
         const cv::Rect wafer_bounds(0, 0, overlay.cols, overlay.rows);
 
-        if (!pipe.candidates.empty()) {
+        if (!crop_cands.empty()) {
             if (result.die_overlay_dir.empty()) {
                 result.die_overlay_dir = opt.out / "die_defects";
                 fs::create_directories(result.die_overlay_dir);
             }
-            const cv::Mat die_base = pipe.dataCommon.empty() ? data : pipe.dataCommon;
-            cv::Mat die_view = drawDefectOverlay(die_base, pipe.candidates);
+            cv::Mat die_view = drawDefectOverlay(data, crop_cands);
             save_png(die_view, result.die_overlay_dir / box.file_name(opt.image.stem().string()));
         }
 
-        for (const DefectCandidate& c : pipe.candidates) {
+        for (const DefectCandidate& c : crop_cands) {
             WaferDefect d;
             d.die_x = box.x_idx;
             d.die_y = box.y_idx;

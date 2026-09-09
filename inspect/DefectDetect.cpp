@@ -270,9 +270,6 @@ void applyDefectPolarity(const cv::Mat& l2Difference, const cv::Mat& templateNor
         cv::bitwise_or(darkMask, darkAssist, darkMask);
         cv::bitwise_or(polarityMask, darkMask, polarityMask);
     }
-    clearMaskBorder(brightMask, params.blob.borderMargin);
-    clearMaskBorder(darkMask, params.blob.borderMargin);
-    clearMaskBorder(polarityMask, params.blob.borderMargin);
     fusedDifference = fuseDifference(l2Difference, polarityMask);
 }
 
@@ -474,6 +471,93 @@ std::vector<DefectCandidate> extractDefectCandidates(const cv::Mat& blobMask,
     return candidates;
 }
 
+std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
+                                                      const LargeWhiteParams& params) {
+    std::vector<DefectCandidate> out;
+    if (!params.enable || image.empty()) {
+        return out;
+    }
+    cv::Mat gray;
+    if (image.channels() == 1) {
+        gray = image;
+    } else if (image.channels() == 3) {
+        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+    } else if (image.channels() == 4) {
+        cv::cvtColor(image, gray, cv::COLOR_BGRA2GRAY);
+    } else {
+        return out;
+    }
+    cv::Mat gray8;
+    if (gray.type() == CV_8UC1) {
+        gray8 = gray;
+    } else {
+        gray.convertTo(gray8, CV_8U);
+    }
+    cv::Mat mask;
+    cv::compare(gray8, params.threshold, mask, cv::CMP_GE);
+    const cv::Mat kernel =
+        cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
+    cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
+    cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
+
+    cv::Mat labels;
+    cv::Mat stats;
+    cv::Mat centroids;
+    const int count = cv::connectedComponentsWithStats(mask, labels, stats, centroids, 8, CV_32S);
+    int id = 0;
+    for (int i = 1; i < count; ++i) {
+        DefectCandidate c;
+        c.area = stats.at<int>(i, cv::CC_STAT_AREA);
+        if (c.area < params.minArea) {
+            continue;
+        }
+        c.bbox = cv::Rect(stats.at<int>(i, cv::CC_STAT_LEFT), stats.at<int>(i, cv::CC_STAT_TOP),
+                          stats.at<int>(i, cv::CC_STAT_WIDTH), stats.at<int>(i, cv::CC_STAT_HEIGHT));
+        const int shortSide = std::min(c.bbox.width, c.bbox.height);
+        const double aspect = shortSide > 0
+                                  ? static_cast<double>(std::max(c.bbox.width, c.bbox.height)) /
+                                        static_cast<double>(shortSide)
+                                  : 0.0;
+        if (aspect > params.maxAspectRatio) {
+            continue;
+        }
+        const double boxArea = static_cast<double>(c.bbox.width) * static_cast<double>(c.bbox.height);
+        if (boxArea <= 0.0 || static_cast<double>(c.area) / boxArea < params.minFill) {
+            continue;
+        }
+        c.id = ++id;
+        c.labelId = i;
+        c.centroid = cv::Point2d(centroids.at<double>(i, 0), centroids.at<double>(i, 1));
+        c.polarity = DefectPolarity::Bright;
+        c.brightArea = c.area;
+        double sum = 0.0;
+        double peak = 0.0;
+        int n = 0;
+        const cv::Rect roi = c.bbox & cv::Rect(0, 0, gray8.cols, gray8.rows);
+        for (int y = roi.y; y < roi.y + roi.height; ++y) {
+            const int* lab = labels.ptr<int>(y);
+            const unsigned char* row = gray8.ptr<unsigned char>(y);
+            for (int x = roi.x; x < roi.x + roi.width; ++x) {
+                if (lab[x] != i) {
+                    continue;
+                }
+                const double v = static_cast<double>(row[x]);
+                sum += v;
+                peak = std::max(peak, v);
+                ++n;
+            }
+        }
+        if (n > 0) {
+            c.meanL2 = sum / static_cast<double>(n);
+            c.maxL2 = peak;
+            c.meanSigned = c.meanL2;
+            c.maxSigned = peak;
+        }
+        out.push_back(c);
+    }
+    return out;
+}
+
 std::vector<DefectCandidate> filterDefects(const std::vector<DefectCandidate>& candidates,
                                            const BlobFilterParams& blob,
                                            const DefectFilterParams& filter,
@@ -505,9 +589,11 @@ std::vector<DefectCandidate> filterDefects(const std::vector<DefectCandidate>& c
         }
         if (imageSize.width > 0 && imageSize.height > 0 && blob.borderMargin > 0) {
             const int m = blob.borderMargin;
-            if (c.bbox.x <= m || c.bbox.y <= m ||
-                c.bbox.x + c.bbox.width >= imageSize.width - m ||
-                c.bbox.y + c.bbox.height >= imageSize.height - m) {
+            const bool touches = c.bbox.x <= m || c.bbox.y <= m ||
+                                 c.bbox.x + c.bbox.width >= imageSize.width - m ||
+                                 c.bbox.y + c.bbox.height >= imageSize.height - m;
+            // 贴边长条是切割/对位伪差；贴边的紧凑黑点（如 die 顶上的小黑点）要留下
+            if (touches && aspect > blob.borderStripAspect) {
                 continue;
             }
         }

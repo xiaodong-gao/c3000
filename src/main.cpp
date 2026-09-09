@@ -40,12 +40,12 @@ int main() {
         cutdie::Options opt;
 
         // ========== 输入 / 输出 ==========
-        opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-gray";
-        opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050.png";
-        opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050.xml";
+        opt.dir = "C:/Users/aspiring135/Desktop/datasets/46um-gray";
+        opt.image = "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046.png";
+        opt.xml = "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046.xml";
         opt.out.clear();                   // 空则写到 <图像目录>/<图像名>/
         opt.patch_out.clear();             // 空则写到 <out>/patches
-        opt.resolution_um = 50.0;          // 每个像素对应多少 um
+        opt.resolution_um = 46.0;          // 每个像素对应多少 um
         opt.keep_skipped = false;          // 是否保存 XML 中标记跳过的 die
         opt.recursive = false;             // 是否递归扫描输入目录
         opt.overlay_preview_px = 8000;     // die 预览图最长边；缺陷原图仍按原始分辨率保存
@@ -103,12 +103,13 @@ int main() {
         opt.defect.morph.darkOpenSize = 0;
 
         // ========== Blob / 几何过滤 ==========
-        opt.defect.blob.minArea = 40;
+        opt.defect.blob.minArea = 25;           // 顶边 16x10 黑点，开运算后面积会变小
         opt.defect.blob.maxArea = 0;
-        opt.defect.blob.minWidth = 5;
-        opt.defect.blob.minHeight = 5;
-        opt.defect.blob.maxAspectRatio = 2.5;
+        opt.defect.blob.minWidth = 4;
+        opt.defect.blob.minHeight = 4;
+        opt.defect.blob.maxAspectRatio = 3.0;
         opt.defect.blob.borderMargin = 4;
+        opt.defect.blob.borderStripAspect = 2.5;  // 贴边细长条才丢；紧凑贴边黑点保留
         opt.defect.blob.minBrightArea = 400;  // 小亮斑多为邻居缺陷反相；真亮缺陷是大块版图差
 
         // ========== 亮/暗缺陷过滤 ==========
@@ -118,6 +119,13 @@ int main() {
         opt.defect.filter.keepUnknown = false;
         opt.defect.filter.minMeanL2 = 10.0;
         opt.defect.filter.minAbsMeanSigned = 8.0;
+
+        // ========== 大块白区（不依赖邻居；边缘 die 白区常与邻居对消） ==========
+        opt.defect.largeWhite.enable = true;
+        opt.defect.largeWhite.threshold = 230.0;
+        opt.defect.largeWhite.minArea = 4000;
+        opt.defect.largeWhite.minFill = 0.15;
+        opt.defect.largeWhite.maxAspectRatio = 3.0;
 
         if (opt.resolution_um <= 0.0) {
             throw std::runtime_error("每个像素对应的 um 必须大于 0");

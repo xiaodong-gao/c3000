@@ -646,7 +646,7 @@ void testDefectDetect(TestStats& stats) {
           "n=" + std::to_string(stripOut.candidates.size()));
 
     cv::Mat edge = cv::Mat::zeros(80, 80, CV_32F);
-    cv::rectangle(edge, cv::Rect(0, 20, 12, 18), cv::Scalar(40.0), cv::FILLED);
+    cv::rectangle(edge, cv::Rect(0, 10, 6, 50), cv::Scalar(40.0), cv::FILLED);
     DefectDetectParams edgeP;
     edgeP.blob.minArea = 10;
     edgeP.blob.maxArea = 0;
@@ -654,9 +654,58 @@ void testDefectDetect(TestStats& stats) {
     edgeP.blob.minHeight = 4;
     edgeP.blob.maxAspectRatio = 12.0;
     edgeP.blob.borderMargin = 2;
+    edgeP.blob.borderStripAspect = 2.5;
     const DefectDetectOutput edgeOut = detectDefects(edge, edge, edgeP);
-    check(stats, edgeOut.ok && edgeOut.candidates.empty(), "defect drops border-touching blob",
+    check(stats, edgeOut.ok && edgeOut.candidates.empty(), "defect drops border-touching strip",
           "n=" + std::to_string(edgeOut.candidates.size()));
+
+    cv::Mat edgeDot = cv::Mat::zeros(96, 128, CV_32F);
+    cv::rectangle(edgeDot, cv::Rect(21, 0, 16, 10), cv::Scalar(30.0), cv::FILLED);
+    DefectDetectParams edgeDotP;
+    edgeDotP.morph.openSize = 3;
+    edgeDotP.morph.closeSize = 3;
+    edgeDotP.blob.minArea = 20;
+    edgeDotP.blob.maxArea = 0;
+    edgeDotP.blob.minWidth = 4;
+    edgeDotP.blob.minHeight = 4;
+    edgeDotP.blob.maxAspectRatio = 3.0;
+    edgeDotP.blob.borderMargin = 4;
+    edgeDotP.blob.borderStripAspect = 2.5;
+    const DefectDetectOutput edgeDotOut = detectDefects(edgeDot, edgeDot, edgeDotP);
+    bool foundEdgeDot = false;
+    for (const auto& c : edgeDotOut.candidates) {
+        if (c.bbox.contains(cv::Point(28, 4))) {
+            foundEdgeDot = true;
+        }
+    }
+    check(stats, edgeDotOut.ok && foundEdgeDot, "defect keeps compact dark spot on die edge",
+          "n=" + std::to_string(edgeDotOut.candidates.size()));
+
+    cv::Mat whiteDie(200, 200, CV_8UC1, cv::Scalar(80));
+    cv::rectangle(whiteDie, cv::Rect(10, 20, 120, 140), cv::Scalar(245), cv::FILLED);
+    LargeWhiteParams lw;
+    lw.enable = true;
+    lw.threshold = 230.0;
+    lw.minArea = 4000;
+    lw.minFill = 0.15;
+    lw.maxAspectRatio = 3.0;
+    const std::vector<DefectCandidate> whites = extractLargeWhiteRegions(whiteDie, lw);
+    check(stats, whites.size() == 1 && whites[0].polarity == DefectPolarity::Bright &&
+                     whites[0].area >= 4000,
+          "large white recovers filled bright region",
+          "n=" + std::to_string(whites.size()) +
+              " area=" + (whites.empty() ? "0" : std::to_string(whites[0].area)));
+
+    cv::Mat whiteStrip(200, 200, CV_8UC1, cv::Scalar(80));
+    cv::rectangle(whiteStrip, cv::Rect(5, 80, 190, 30), cv::Scalar(245), cv::FILLED);
+    const std::vector<DefectCandidate> strips = extractLargeWhiteRegions(whiteStrip, lw);
+    check(stats, strips.empty(), "large white drops high-aspect bright strip",
+          "n=" + std::to_string(strips.size()));
+
+    LargeWhiteParams lwOff = lw;
+    lwOff.enable = false;
+    check(stats, extractLargeWhiteRegions(whiteDie, lwOff).empty(),
+          "large white skipped when disabled", "still emitted candidates");
 }
 
 cv::Mat makeScene(int width, int height, bool color) {
