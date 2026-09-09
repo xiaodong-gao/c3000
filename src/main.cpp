@@ -41,8 +41,8 @@ int main() {
 
         // ========== 输入 / 输出 ==========
         opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-gray";
-        opt.image.clear();                 // 空则扫描 dir 内 PNG/XML
-        opt.xml.clear();                   // 空则按图像名自动匹配
+        opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050.png";
+        opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050.xml";
         opt.out.clear();                   // 空则写到 <图像目录>/<图像名>/
         opt.patch_out.clear();             // 空则写到 <out>/patches
         opt.resolution_um = 50.0;          // 每个像素对应多少 um
@@ -51,10 +51,15 @@ int main() {
         opt.overlay_preview_px = 8000;     // die 预览图最长边；缺陷原图仍按原始分辨率保存
 
         // ========== 模板 / 检出开关 ==========
-        // 外部模板：单张图（所有 die 共用）或含 die_x*_y* 文件名的文件夹
-        opt.template_path = "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050/patches/0050_die_x0_y12.png";
-            
+        // 空 + template_neighbor：切割后用本片相邻 die 做 D2D
+        opt.template_path.clear();
+        opt.template_neighbor = true;
+        opt.template_neighbor_min = 2;      // 两个邻居都检出才算缺陷
         opt.inspect = true;
+
+        // ========== patch 评测（非空则不切晶圆） ==========
+        opt.eval_patch_dir.clear();
+        opt.eval_truth_dir.clear();
 
         // ========== 后端 ==========
         // AlignMethod: PhaseCuda / PhaseCpu / EccCuda / EccCpu
@@ -75,21 +80,44 @@ int main() {
         opt.ecc.eps = 1e-5;             // 收敛阈值
         opt.ecc.gaussFiltSize = 3;      // 高斯滤波窗口，必须为正奇数
 
-        // ========== 自适应阈值（L2 差分） ==========
+        // ========== 自适应阈值（融合差分） ==========
         opt.defect.adaptive.blockSize = 31;  // 局部窗口，奇数；<=0 则按图像尺寸自动
-        opt.defect.adaptive.k = 3.0;         // localMean + k*localStd，以及 median + k*1.4826*MAD
-        opt.defect.adaptive.minAbs = 6.0;    // L2 绝对下限
+        opt.defect.adaptive.k = 4.0;
+        opt.defect.adaptive.minAbs = 14.0;   // L2 绝对下限，压掉晶粒噪声
+
+        // ========== 有符号差分极性（data - template） ==========
+        opt.defect.signedDiff.T = 14.0;     // +T 亮缺陷；<=0 则按 MAD 自动
+        opt.defect.signedDiff.darkT = 10.0; // 暗缺陷：signed < -darkT；0 则与 T 相同
+
+        // ========== 小黑点增强（黑帽） ==========
+        opt.defect.darkSpot.enableBlackHat = false;
+        opt.defect.darkSpot.kernel = 15;
+        opt.defect.darkSpot.minResponse = 8.0;
 
         // ========== 形态学 ==========
-        opt.defect.morph.openSize = 5;   // 开运算核；<3 则跳过
-        opt.defect.morph.closeSize = 5;  // 闭运算核；<3 则跳过
+        opt.defect.morph.openSize = 3;
+        opt.defect.morph.closeSize = 3;
+        opt.defect.morph.dilateSize = 0;
+        opt.defect.morph.erodeSize = 0;
+        opt.defect.morph.removeNoiseSize = 0;
+        opt.defect.morph.darkOpenSize = 0;
 
-        // ========== Blob 过滤 ==========
-        opt.defect.blob.minArea = 20;           // 最小面积
-        opt.defect.blob.maxArea = 0;        // 最大面积；0 表示不限制
-        opt.defect.blob.minWidth = 5;           // 最小宽度
-        opt.defect.blob.minHeight = 5;          // 最小高度
-        opt.defect.blob.maxAspectRatio = 3.0;  // 最大长宽比（大面积 blob 放宽）
+        // ========== Blob / 几何过滤 ==========
+        opt.defect.blob.minArea = 40;
+        opt.defect.blob.maxArea = 0;
+        opt.defect.blob.minWidth = 5;
+        opt.defect.blob.minHeight = 5;
+        opt.defect.blob.maxAspectRatio = 2.5;
+        opt.defect.blob.borderMargin = 4;
+        opt.defect.blob.minBrightArea = 400;  // 小亮斑多为邻居缺陷反相；真亮缺陷是大块版图差
+
+        // ========== 亮/暗缺陷过滤 ==========
+        opt.defect.filter.keepBright = true;
+        opt.defect.filter.keepDark = true;
+        opt.defect.filter.keepMixed = false;
+        opt.defect.filter.keepUnknown = false;
+        opt.defect.filter.minMeanL2 = 10.0;
+        opt.defect.filter.minAbsMeanSigned = 8.0;
 
         if (opt.resolution_um <= 0.0) {
             throw std::runtime_error("每个像素对应的 um 必须大于 0");

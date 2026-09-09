@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
 namespace {
@@ -554,6 +555,108 @@ void testDefectDetect(TestStats& stats) {
         check(stats, huge.candidates[0].area >= 5000, "defect large square area",
               "area=" + std::to_string(huge.candidates[0].area));
     }
+
+    cv::Mat tmpl(96, 128, CV_8UC1, cv::Scalar(120));
+    cv::Mat data = tmpl.clone();
+    cv::rectangle(data, cv::Rect(20, 20, 18, 16), cv::Scalar(220), cv::FILLED);
+    cv::rectangle(data, cv::Rect(80, 50, 18, 16), cv::Scalar(20), cv::FILLED);
+    cv::Mat absDiff;
+    cv::Mat polarL2;
+    cv::absdiff(tmpl, data, absDiff);
+    absDiff.convertTo(polarL2, CV_32F);
+    DefectDetectParams polar;
+    polar.signedDiff.T = 8.0;
+    polar.blob.minArea = 20;
+    polar.blob.maxArea = 0;
+    polar.blob.minWidth = 4;
+    polar.blob.minHeight = 4;
+    const DefectDetectOutput both = detectDefects(polarL2, tmpl, polar, tmpl, data);
+    check(stats, both.ok && both.candidates.size() == 2, "defect bright+dark count",
+          "n=" + std::to_string(both.candidates.size()) + " T=" + std::to_string(both.polarityT));
+    bool sawBright = false;
+    bool sawDark = false;
+    for (const auto& c : both.candidates) {
+        sawBright = sawBright || c.polarity == DefectPolarity::Bright;
+        sawDark = sawDark || c.polarity == DefectPolarity::Dark;
+    }
+    check(stats, sawBright, "defect classifies bright", "missing bright");
+    check(stats, sawDark, "defect classifies dark", "missing dark");
+    check(stats, cv::countNonZero(both.brightMask) > 0 && cv::countNonZero(both.darkMask) > 0,
+          "defect polarity masks", "bright/dark mask empty");
+
+    polar.filter.keepBright = true;
+    polar.filter.keepDark = false;
+    polar.filter.keepMixed = false;
+    polar.filter.keepUnknown = false;
+    const DefectDetectOutput brightOnly = detectDefects(polarL2, tmpl, polar, tmpl, data);
+    check(stats, brightOnly.ok && brightOnly.candidates.size() == 1 &&
+                     brightOnly.candidates[0].polarity == DefectPolarity::Bright,
+          "defect filter keeps bright only",
+          "n=" + std::to_string(brightOnly.candidates.size()));
+
+    cv::Mat darkTmpl(202, 202, CV_8UC1, cv::Scalar(186));
+    cv::Mat darkData = darkTmpl.clone();
+    cv::circle(darkData, cv::Point(115, 119), 5, cv::Scalar(140), cv::FILLED);
+    cv::Mat darkAbs;
+    cv::Mat darkL2;
+    cv::absdiff(darkTmpl, darkData, darkAbs);
+    darkAbs.convertTo(darkL2, CV_32F);
+    DefectDetectParams darkP;
+    darkP.signedDiff.T = 8.0;
+    darkP.signedDiff.darkT = 5.0;
+    darkP.darkSpot.enableBlackHat = true;
+    darkP.darkSpot.kernel = 15;
+    darkP.darkSpot.minResponse = 5.0;
+    darkP.morph.openSize = 5;
+    darkP.morph.closeSize = 5;
+    darkP.morph.darkOpenSize = 3;
+    darkP.blob.minArea = 15;
+    darkP.blob.maxArea = 0;
+    darkP.blob.minWidth = 4;
+    darkP.blob.minHeight = 4;
+    darkP.blob.maxAspectRatio = 3.0;
+    darkP.blob.borderMargin = 3;
+    darkP.filter.keepBright = false;
+    darkP.filter.keepDark = true;
+    darkP.filter.keepMixed = false;
+    darkP.filter.keepUnknown = false;
+    const DefectDetectOutput smallDark = detectDefects(darkL2, darkTmpl, darkP, darkTmpl, darkData);
+    bool foundSmallDark = false;
+    for (const auto& c : smallDark.candidates) {
+        if (c.polarity == DefectPolarity::Dark && c.bbox.contains(cv::Point(115, 119))) {
+            foundSmallDark = true;
+        }
+    }
+    check(stats, smallDark.ok && foundSmallDark, "defect recovers ~10px dark spot",
+          "n=" + std::to_string(smallDark.candidates.size()) +
+              " polarityT=" + std::to_string(smallDark.polarityT));
+
+    cv::Mat strip = cv::Mat::zeros(120, 220, CV_32F);
+    cv::rectangle(strip, cv::Rect(20, 40, 180, 7), cv::Scalar(40.0), cv::FILLED);
+    DefectDetectParams stripP;
+    stripP.blob.minArea = 20;
+    stripP.blob.maxArea = 0;
+    stripP.blob.minWidth = 4;
+    stripP.blob.minHeight = 4;
+    stripP.blob.maxAspectRatio = 3.0;
+    stripP.blob.borderMargin = 0;
+    const DefectDetectOutput stripOut = detectDefects(strip, strip, stripP);
+    check(stats, stripOut.ok && stripOut.candidates.empty(),
+          "defect drops large high-aspect strip",
+          "n=" + std::to_string(stripOut.candidates.size()));
+
+    cv::Mat edge = cv::Mat::zeros(80, 80, CV_32F);
+    cv::rectangle(edge, cv::Rect(0, 20, 12, 18), cv::Scalar(40.0), cv::FILLED);
+    DefectDetectParams edgeP;
+    edgeP.blob.minArea = 10;
+    edgeP.blob.maxArea = 0;
+    edgeP.blob.minWidth = 4;
+    edgeP.blob.minHeight = 4;
+    edgeP.blob.maxAspectRatio = 12.0;
+    edgeP.blob.borderMargin = 2;
+    const DefectDetectOutput edgeOut = detectDefects(edge, edge, edgeP);
+    check(stats, edgeOut.ok && edgeOut.candidates.empty(), "defect drops border-touching blob",
+          "n=" + std::to_string(edgeOut.candidates.size()));
 }
 
 cv::Mat makeScene(int width, int height, bool color) {
@@ -740,6 +843,9 @@ void testInspectWaferOverlay(TestStats& stats) {
     opt.align_method = cutdie::AlignMethod::EccCpu;
     opt.histogram_method = cutdie::HistogramMethod::Cpu;
     opt.normalize_method = cutdie::NormalizeMethod::Cpu;
+    opt.defect.signedDiff.T = 8.0;
+    opt.defect.blob.minArea = 20;
+    opt.defect.blob.maxArea = 0;
 
     cutdie::TemplateCache templates;
     templates.single = true;
@@ -761,9 +867,11 @@ void testInspectWaferOverlay(TestStats& stats) {
 
     int onRight = 0;
     bool mappedToOriginal = false;
+    bool sawDark = false;
     for (const auto& d : result.defects) {
         if (d.die_x == 1) {
             ++onRight;
+            sawDark = sawDark || d.polarity == DefectPolarity::Dark;
             if (d.bbox.x >= 160 && d.bbox.x + d.bbox.width <= 320 && d.bbox.y >= 0 &&
                 d.bbox.y + d.bbox.height <= 160) {
                 mappedToOriginal = true;
@@ -775,6 +883,66 @@ void testInspectWaferOverlay(TestStats& stats) {
               " total=" + std::to_string(result.defect_count));
     check(stats, mappedToOriginal, "inspect wafer maps defect onto original image",
           "no right-die bbox inside original crop");
+    check(stats, sawDark, "inspect wafer classifies dark defect", "no dark polarity on data die");
+    check(stats, !result.die_overlay_dir.empty() && std::filesystem::exists(result.die_overlay_dir),
+          "inspect wafer writes per-die overlays", result.die_overlay_dir.string());
+}
+
+void testRealSmallDarkSpot(TestStats& stats, PipelineContext& ctx) {
+    const std::filesystem::path dataPath(
+        "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050/patches/0050_die_x12_y2.png");
+    const std::filesystem::path tmplPath(
+        "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050/patches/0050_die_x0_y12.png");
+    if (!std::filesystem::exists(dataPath) || !std::filesystem::exists(tmplPath)) {
+        printf("skip real dark-spot (dataset patch missing)\n");
+        return;
+    }
+
+    const cv::Mat tmpl = cv::imread(tmplPath.string(), cv::IMREAD_UNCHANGED);
+    const cv::Mat data = cv::imread(dataPath.string(), cv::IMREAD_UNCHANGED);
+    check(stats, !tmpl.empty() && !data.empty(), "real dark-spot images load",
+          "tmpl=" + tmplPath.string() + " data=" + dataPath.string());
+    if (tmpl.empty() || data.empty()) {
+        return;
+    }
+
+    DefectDetectParams p;
+    p.signedDiff.T = 8.0;
+    p.signedDiff.darkT = 5.0;
+    p.darkSpot.enableBlackHat = true;
+    p.darkSpot.kernel = 15;
+    p.darkSpot.minResponse = 5.0;
+    p.morph.openSize = 3;
+    p.morph.closeSize = 5;
+    p.morph.darkOpenSize = 3;
+    p.blob.minArea = 15;
+    p.blob.maxArea = 0;
+    p.blob.minWidth = 4;
+    p.blob.minHeight = 4;
+    p.blob.maxAspectRatio = 3.0;
+    p.blob.borderMargin = 3;
+    p.filter.keepBright = false;
+    p.filter.keepDark = true;
+    p.filter.keepMixed = false;
+    p.filter.keepUnknown = false;
+    ctx.defectParams = p;
+
+    const PipelineOutput pipe =
+        runD2DPipeline(tmpl, data, PipelineBackend::Cpu, PipelineAlign::Phase, ctx);
+    check(stats, pipe.ok, "real dark-spot pipeline ok", pipe.error);
+
+    bool found = false;
+    const cv::Point expect(115, 119);
+    for (const auto& c : pipe.candidates) {
+        const cv::Point2d delta = c.centroid - cv::Point2d(expect);
+        if (c.polarity == DefectPolarity::Dark &&
+            (c.bbox.contains(expect) || std::sqrt(delta.x * delta.x + delta.y * delta.y) <= 20.0)) {
+            found = true;
+            break;
+        }
+    }
+    check(stats, found, "real 0050_die_x12_y2 small dark spot",
+          "n=" + std::to_string(pipe.candidates.size()));
 }
 
 }  // namespace
@@ -810,6 +978,7 @@ int runRegressionTests() {
     testDefectDetect(stats);
     testEndToEndPipeline(stats, ctx);
     testInspectWaferOverlay(stats);
+    testRealSmallDarkSpot(stats, ctx);
 
     printf("\nregression: %d passed, %d failed\n", stats.passed, stats.failed);
     return stats.failed == 0 ? 0 : 1;

@@ -11,9 +11,24 @@ struct AdaptiveThresholdParams {
     double minAbs = 6.0;  // absolute L2 floor
 };
 
+struct SignedDiffParams {
+    double T = 0.0;      // bright polarity: signed > +T；<=0 auto from MAD
+    double darkT = 0.0;  // dark polarity: signed < -darkT；<=0 则用 T
+};
+
+struct DarkSpotParams {
+    bool enableBlackHat = true;  // 黑帽增强，专门抓亮底上的小黑点
+    int kernel = 11;             // 应大于目标黑点
+    double minResponse = 6.0;    // 黑帽响应下限
+};
+
 struct MorphologicalParams {
     int openSize = 3;
     int closeSize = 5;
+    int dilateSize = 0;       // <3 skip
+    int erodeSize = 0;        // <3 skip
+    int removeNoiseSize = 0;  // extra open to drop speckles; <3 skip
+    int darkOpenSize = 0;     // 暗通道单独开运算后并入；<3 则跳过。建议 3，避免 openSize 过大吃掉小黑点
 };
 
 struct BlobFilterParams {
@@ -22,32 +37,92 @@ struct BlobFilterParams {
     int minWidth = 5;
     int minHeight = 5;
     double maxAspectRatio = 12.0;
+    int borderMargin = 2;  // 丢弃贴着 ROI 边的伪差；0 关闭
+    int minBrightArea = 0; // >0 时亮缺陷用更大面积门限，用来丢掉小亮伪差
+};
+
+struct DefectFilterParams {
+    bool keepBright = true;
+    bool keepDark = true;
+    bool keepMixed = true;
+    bool keepUnknown = true;
+    double minMeanL2 = 0.0;
+    double minAbsMeanSigned = 0.0;
 };
 
 struct DefectDetectParams {
     AdaptiveThresholdParams adaptive;
+    SignedDiffParams signedDiff;
+    DarkSpotParams darkSpot;
     MorphologicalParams morph;
     BlobFilterParams blob;
+    DefectFilterParams filter;
 };
+
+enum class DefectPolarity { Unknown, Bright, Dark, Mixed };
 
 struct DefectCandidate {
     int id = 0;
+    int labelId = 0;
     cv::Rect bbox;
     cv::Point2d centroid;
     int area = 0;
     double meanL2 = 0.0;
     double maxL2 = 0.0;
+    double meanSigned = 0.0;
+    double maxSigned = 0.0;
+    double minSigned = 0.0;
+    int brightArea = 0;
+    int darkArea = 0;
+    DefectPolarity polarity = DefectPolarity::Unknown;
 };
 
 struct DefectDetectOutput {
     bool ok = false;
     std::string error;
-    cv::Mat adaptiveMask;  // CV_8UC1, 0/255
+    cv::Mat signedDifference;  // CV_32FC1, dataNormalized - templateNormalized
+    cv::Mat fusedDifference;   // L2 gated by bright/dark polarity
+    cv::Mat brightMask;        // signed > +T
+    cv::Mat darkMask;          // signed < -T
+    cv::Mat polarityMask;      // bright | dark
+    cv::Mat adaptiveMask;      // CV_8UC1, 0/255
     cv::Mat morphMask;
     cv::Mat blobMask;
     cv::Mat overlay;
+    double polarityT = 0.0;
+    double polarityDarkT = 0.0;
     std::vector<DefectCandidate> candidates;
 };
+
+const char* defectPolarityName(DefectPolarity polarity);
+
+cv::Mat signedDifferenceMap(const cv::Mat& templateNormalized, const cv::Mat& dataNormalized);
+
+cv::Mat polarityMasks(const cv::Mat& signedDifference, double brightT, double darkT,
+                      cv::Mat& brightMask, cv::Mat& darkMask);
+
+cv::Mat polarityMasks(const cv::Mat& signedDifference, double T, cv::Mat& brightMask,
+                      cv::Mat& darkMask);
+
+double signedPolarityThreshold(const cv::Mat& signedDifference, const DefectDetectParams& params);
+
+double signedDarkPolarityThreshold(const DefectDetectParams& params, double brightT);
+
+cv::Mat darkSpotAssistMask(const cv::Mat& dataNormalized, const cv::Mat& signedDifference,
+                           const DarkSpotParams& params, double signedGate);
+
+void clearMaskBorder(cv::Mat& mask, int margin);
+
+cv::Mat fuseDifference(const cv::Mat& l2Difference, const cv::Mat& polarityMask);
+
+void applyDefectPolarity(const cv::Mat& l2Difference, const cv::Mat& templateNormalized,
+                         const cv::Mat& dataNormalized, const DefectDetectParams& params,
+                         cv::Mat& signedDifference, cv::Mat& brightMask, cv::Mat& darkMask,
+                         cv::Mat& polarityMask, cv::Mat& fusedDifference, double& polarityT,
+                         double& polarityDarkT);
+
+cv::Mat mergeMorphWithDarkChannel(const cv::Mat& adaptiveMask, const cv::Mat& darkMask,
+                                  const MorphologicalParams& morph);
 
 cv::Mat adaptiveThresholdDiff(const cv::Mat& l2Difference, const AdaptiveThresholdParams& params = {});
 
@@ -56,9 +131,22 @@ cv::Mat morphologicalClean(const cv::Mat& binary, const MorphologicalParams& par
 cv::Mat blobFilter(const cv::Mat& binary, const BlobFilterParams& params = {});
 
 std::vector<DefectCandidate> extractDefectCandidates(const cv::Mat& blobMask,
-                                                     const cv::Mat& l2Difference);
+                                                     const cv::Mat& l2Difference,
+                                                     const cv::Mat& signedDifference = {},
+                                                     const cv::Mat& brightMask = {},
+                                                     const cv::Mat& darkMask = {});
+
+std::vector<DefectCandidate> filterDefects(const std::vector<DefectCandidate>& candidates,
+                                           const BlobFilterParams& blob,
+                                           const DefectFilterParams& filter = {},
+                                           cv::Size imageSize = {});
+
+cv::Mat maskFromCandidates(const cv::Size& size, const std::vector<DefectCandidate>& candidates,
+                           const cv::Mat& labels);
 
 cv::Mat drawDefectOverlay(const cv::Mat& base, const std::vector<DefectCandidate>& candidates);
 
 DefectDetectOutput detectDefects(const cv::Mat& l2Difference, const cv::Mat& overlayBase,
-                                 const DefectDetectParams& params = {});
+                                 const DefectDetectParams& params = {},
+                                 const cv::Mat& templateNormalized = {},
+                                 const cv::Mat& dataNormalized = {});

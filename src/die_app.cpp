@@ -213,6 +213,8 @@ int run(Options opt) {
     opt.xml = resolve_path(opt.xml, base);
     opt.patch_out = resolve_path(opt.patch_out, base);
     opt.template_path = resolve_path(opt.template_path, base);
+    opt.eval_patch_dir = resolve_path(opt.eval_patch_dir, base);
+    opt.eval_truth_dir = resolve_path(opt.eval_truth_dir, base);
     if (!opt.out.empty() && opt.out.is_relative()) {
         opt.out = fs::absolute(opt.out);
     }
@@ -222,6 +224,22 @@ int run(Options opt) {
 
     if (opt.resolution_um <= 0.0) {
         throw std::runtime_error("每个像素对应的 um 必须大于 0");
+    }
+
+    if (!opt.eval_patch_dir.empty()) {
+        if (opt.template_path.empty()) {
+            throw std::runtime_error("patch 评测需要指定外部模板");
+        }
+        if (opt.eval_truth_dir.empty()) {
+            throw std::runtime_error("patch 评测需要指定 eval_truth_dir");
+        }
+        const TemplateCache templates = load_templates(opt.template_path);
+        std::cout << "patch 评测模式\n";
+        std::cout << "  待测: " << opt.eval_patch_dir.string() << '\n';
+        std::cout << "  正样本: " << opt.eval_truth_dir.string() << '\n';
+        std::cout << "  模板: " << opt.template_path.string() << '\n';
+        const PatchEvalResult result = eval_patches(opt, templates);
+        return (result.fn == 0 && result.fp == 0 && result.failed == 0) ? 0 : 1;
     }
     const double resolution_um = opt.resolution_um;
     const auto jobs = collect_jobs(opt);
@@ -238,20 +256,23 @@ int run(Options opt) {
         std::cout << "  输出: " << one.patch_out.string() << '\n';
         try {
             TemplateCache templates;
-            if (one.inspect) {
-                if (one.template_path.empty()) {
-                    std::cerr << "  跳过检出: 未指定外部模板路径\n";
-                    one.inspect = false;
-                } else {
-                    templates = load_templates(one.template_path);
-                    std::cout << "  模板: " << one.template_path.string()
-                              << (templates.single ? " (单模板已预载)" : " (按 die 匹配已预载)")
-                              << '\n';
-                }
+            if (one.inspect && !one.template_path.empty()) {
+                templates = load_templates(one.template_path);
+                std::cout << "  模板: " << one.template_path.string()
+                          << (templates.single ? " (单模板已预载)" : " (按 die 匹配已预载)")
+                          << '\n';
             }
             const CutResult cut = cut_patches(one, resolution_um);
             if (one.inspect) {
-                inspect_wafer(one, cut, templates);
+                if (one.template_neighbor && templates.by_xy.empty() && templates.single_img.empty()) {
+                    templates = templates_from_cut(cut, one.keep_skipped);
+                    std::cout << "  模板: 本片相邻 die (" << templates.by_xy.size() << ")\n";
+                }
+                if (templates.single ? templates.single_img.empty() : templates.by_xy.empty()) {
+                    std::cerr << "  跳过检出: 未指定外部模板，且未启用相邻 die\n";
+                } else {
+                    inspect_wafer(one, cut, templates);
+                }
             }
         } catch (const std::exception& ex) {
             std::cerr << "  失败: " << ex.what() << '\n';

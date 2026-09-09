@@ -42,12 +42,19 @@ struct PipelineOutput {
     cv::Mat templateNormalized;
     cv::Mat dataNormalized;
     cv::Mat absoluteDifference;
+    cv::Mat signedDifference;
     cv::Mat l2Difference;
+    cv::Mat fusedDifference;
+    cv::Mat brightMask;
+    cv::Mat darkMask;
+    cv::Mat polarityMask;
     cv::Mat adaptiveMask;
     cv::Mat morphMask;
     cv::Mat blobMask;
     cv::Mat defectOverlay;
     std::vector<DefectCandidate> candidates;
+    double polarityT = 0.0;
+    double polarityDarkT = 0.0;
 
     HistogramThresholdResult templateHist{};
     HistogramThresholdResult dataHist{};

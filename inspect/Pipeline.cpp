@@ -113,12 +113,12 @@ const char* pipelineFlowText() {
         "  -> sub-pixel warp of the original data image\n"
         "  -> crop valid common-overlap template/data ROI\n"
         "  -> per-channel intensity normalization (CPU or CUDA)\n"
-        "  -> per-channel Absolute Difference + per-pixel channel-fused L2 Difference\n"
-        "  -> Adaptive Threshold\n"
-        "  -> Morphological\n"
-        "  -> Blob Filter\n"
-        "  -> Defect Candidate\n"
-        "  -> [next] features -> classification -> review / SPC / wafer map\n";
+        "  -> Absolute / Signed / L2 Difference\n"
+        "  -> Signed polarity: Bright Mask (diff>+T) / Dark Mask (diff<-T)\n"
+        "  -> fused Difference -> Adaptive Threshold\n"
+        "  -> Morphology (Open / Close / Dilate / Erode / Remove Noise)\n"
+        "  -> Connected Components -> Defect Blob -> Feature Extraction\n"
+        "  -> Bright Defect / Dark Defect -> Defect Filtering\n";
 }
 
 static PipelineBackend histogramBackendOf(PipelineBackend pipelineBackend, const PipelineContext& ctx) {
@@ -278,8 +278,13 @@ PipelineOutput runD2DPipeline(const cv::Mat& templateImg, const cv::Mat& dataImg
     out.normalizeStats = normalized.stats;
     out.timing.normalizeDiffMs = clock.stop();
 
+    out.signedDifference = {};
+    applyDefectPolarity(out.l2Difference, out.templateNormalized, out.dataNormalized,
+                        ctx.defectParams, out.signedDifference, out.brightMask, out.darkMask,
+                        out.polarityMask, out.fusedDifference, out.polarityT, out.polarityDarkT);
+
     clock.start();
-    out.adaptiveMask = adaptiveThresholdDiff(out.l2Difference, ctx.defectParams.adaptive);
+    out.adaptiveMask = adaptiveThresholdDiff(out.fusedDifference, ctx.defectParams.adaptive);
     if (out.adaptiveMask.empty()) {
         out.error = "adaptive threshold failed";
         return out;
@@ -287,15 +292,23 @@ PipelineOutput runD2DPipeline(const cv::Mat& templateImg, const cv::Mat& dataImg
     out.timing.adaptiveMs = clock.stop();
 
     clock.start();
-    out.morphMask = morphologicalClean(out.adaptiveMask, ctx.defectParams.morph);
+    out.morphMask =
+        mergeMorphWithDarkChannel(out.adaptiveMask, out.darkMask, ctx.defectParams.morph);
     out.timing.morphMs = clock.stop();
 
     clock.start();
-    out.blobMask = blobFilter(out.morphMask, ctx.defectParams.blob);
+    cv::Mat labels;
+    cv::Mat stats;
+    cv::Mat centroids;
+    cv::connectedComponentsWithStats(out.morphMask, labels, stats, centroids, 8, CV_32S);
+    const std::vector<DefectCandidate> raw = extractDefectCandidates(
+        out.morphMask, out.l2Difference, out.signedDifference, out.brightMask, out.darkMask);
+    out.candidates =
+        filterDefects(raw, ctx.defectParams.blob, ctx.defectParams.filter, out.morphMask.size());
+    out.blobMask = maskFromCandidates(out.morphMask.size(), out.candidates, labels);
     out.timing.blobMs = clock.stop();
 
     clock.start();
-    out.candidates = extractDefectCandidates(out.blobMask, out.l2Difference);
     out.defectOverlay = drawDefectOverlay(out.templateNormalized, out.candidates);
     out.timing.candidateMs = clock.stop();
 

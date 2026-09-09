@@ -18,11 +18,16 @@ struct WaferDefect {
     int area = 0;
     double meanL2 = 0.0;
     double maxL2 = 0.0;
+    double meanSigned = 0.0;
+    int brightArea = 0;
+    int darkArea = 0;
+    DefectPolarity polarity = DefectPolarity::Unknown;
 };
 
 struct InspectResult {
     fs::path overlay_path;
     fs::path csv_path;
+    fs::path die_overlay_dir;
     int inspected = 0;
     int failed = 0;
     int skipped_no_template = 0;
@@ -38,10 +43,27 @@ struct TemplateCache {
     std::map<std::pair<int, int>, cv::Mat> by_xy;
 };
 
+struct PatchEvalResult {
+    int total = 0;
+    int tp = 0;
+    int fp = 0;
+    int fn = 0;
+    int tn = 0;
+    int failed = 0;
+    fs::path report_path;
+    fs::path overlay_dir;
+};
+
 // 切割前先读入外部模板，避免 patch 目录被清空后找不到模板。
 TemplateCache load_templates(const fs::path& template_path);
 
+// 用本片已切割 die 作为相邻模板库（Die-to-Die）。
+TemplateCache templates_from_cut(const CutResult& cut, bool keep_skipped);
+
 // 用外部模板对每个 die 做完整 D2D 检出，把缺陷画回原始晶圆大图并保存。
 InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const TemplateCache& templates);
+
+// 对已切割 patch 做 D2D，按 eval_truth_dir 文件名统计 TP/FP/FN。
+PatchEvalResult eval_patches(const Options& opt, const TemplateCache& templates);
 
 }  // namespace cutdie

@@ -71,9 +71,15 @@ struct Options {
     // 外部模板：单张图（所有 die 共用）或文件夹（按 die_x*_y* 匹配）
     fs::path template_path;
     bool inspect = true;
+    bool template_neighbor = false;   // 文件夹模板时，用相邻 die 而不是自己
+    int template_neighbor_min = 1;    // >=2：至少两个邻居都检出才算有缺陷
     AlignMethod align_method = AlignMethod::EccCpu;
     HistogramMethod histogram_method = HistogramMethod::Cpu;
     NormalizeMethod normalize_method = NormalizeMethod::Cpu;
+
+    // 非空则只评测已切割 patch，不切晶圆。eval_truth_dir 内文件名视为有缺陷。
+    fs::path eval_patch_dir;
+    fs::path eval_truth_dir;
 
     // 检出配方。默认值与各模块原参数一致，实际以 main 中赋值为准。
     HistogramThresholdParams histogram = histogramThresholdDefaultParams();
