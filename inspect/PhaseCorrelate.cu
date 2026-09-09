@@ -251,7 +251,8 @@ cudaError_t makeCandidate(DeviceWorkspace& ws, int x0, int y0, int maxShift, dou
     const double dx = -subX;
     const double dy = -subY;
     const double mag = std::hypot(dx, dy);
-    if (mag < *bestMag - 1e-6 || (std::abs(mag - *bestMag) <= 1e-6 && value > *bestValue)) {
+    if (value > *bestValue + 1e-12 ||
+        (std::abs(value - *bestValue) <= 1e-12 && mag < *bestMag)) {
         *bestMag = mag;
         *bestValue = value;
         *bestDx = dx;

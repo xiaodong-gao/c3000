@@ -167,13 +167,14 @@ double appearance_mae(const cv::Mat& a, const cv::Mat& b) {
     }
     cv::Mat da = ga(cv::Rect(0, 0, w, h));
     cv::Mat db = gb(cv::Rect(0, 0, w, h));
-    cv::Mat diff;
-    cv::absdiff(da, db, diff);
-    return cv::mean(diff)[0];
+    return cv::norm(da, db, cv::NORM_L1) /
+           (static_cast<double>(w) * static_cast<double>(h));
 }
 
 struct TemplateStore {
-    TemplateCache cache;
+    explicit TemplateStore(const TemplateCache& value) : cache(value) {}
+
+    const TemplateCache& cache;
 
     cv::Mat find(int x_idx, int y_idx, std::string& error, fs::path& used) const {
         used = cache.source;
@@ -366,8 +367,7 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
         throw std::runtime_error("外部模板为空");
     }
 
-    TemplateStore store;
-    store.cache = templates;
+    TemplateStore store(templates);
     const PipelineBackend align_backend = pipeline_backend_of(opt.align_method);
     const PipelineBackend hist_backend =
         resolve_histogram_backend(opt.histogram_method, align_backend);
@@ -462,7 +462,7 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
         int neighbor_hits = 0;
         std::string pipe_error;
         for (cv::Mat templ : refs) {
-            cv::Mat data_one = data.clone();
+            cv::Mat data_one = data;
             if (!match_pair_size(templ, data_one)) {
                 continue;
             }
@@ -613,8 +613,8 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
             cv::findContours(pipe.blobMask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
             for (auto& contour : contours) {
                 for (auto& pt : contour) {
-                    pt.x += origin_x;
-                    pt.y += origin_y;
+                    pt.x += origin_x + pipe.commonRoi.x;
+                    pt.y += origin_y + pipe.commonRoi.y;
                 }
                 all_contours.push_back(std::move(contour));
             }
@@ -692,8 +692,7 @@ PatchEvalResult eval_patches(const Options& opt, const TemplateCache& templates)
         throw std::runtime_error("待测 patch 目录中没有图像: " + opt.eval_patch_dir.string());
     }
 
-    TemplateStore store;
-    store.cache = templates;
+    TemplateStore store(templates);
     const PipelineBackend align_backend = pipeline_backend_of(opt.align_method);
     const PipelineBackend hist_backend =
         resolve_histogram_backend(opt.histogram_method, align_backend);
@@ -793,7 +792,7 @@ PatchEvalResult eval_patches(const Options& opt, const TemplateCache& templates)
                 int neighbor_hits = 0;
                 std::string pipe_error;
                 for (cv::Mat templ : refs) {
-                    cv::Mat data_one = data.clone();
+                    cv::Mat data_one = data;
                     if (!match_pair_size(templ, data_one)) {
                         continue;
                     }

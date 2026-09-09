@@ -206,6 +206,16 @@ PipelineOutput runD2DPipeline(const cv::Mat& templateImg, const cv::Mat& dataImg
     out.dataT = out.dataHist.threshold;
     out.fusedT = HistogramThreshold::fuse(out.templateT, out.dataT);
 
+    if (align == PipelineAlign::Phase) {
+        const int templateForeground = cv::countNonZero(out.templateBin);
+        const int dataForeground = cv::countNonZero(out.dataBin);
+        if (templateForeground == 0 || templateForeground == n || dataForeground == 0 ||
+            dataForeground == n) {
+            out.error = "phase correlation requires non-uniform binary images";
+            return out;
+        }
+    }
+
     clock.start();
     if (align == PipelineAlign::Ecc) {
         out.metricName = "cc";
@@ -298,11 +308,9 @@ PipelineOutput runD2DPipeline(const cv::Mat& templateImg, const cv::Mat& dataImg
 
     clock.start();
     cv::Mat labels;
-    cv::Mat stats;
-    cv::Mat centroids;
-    cv::connectedComponentsWithStats(out.morphMask, labels, stats, centroids, 8, CV_32S);
     const std::vector<DefectCandidate> raw = extractDefectCandidates(
-        out.morphMask, out.l2Difference, out.signedDifference, out.brightMask, out.darkMask);
+        out.morphMask, out.l2Difference, out.signedDifference, out.brightMask, out.darkMask,
+        &labels);
     out.candidates =
         filterDefects(raw, ctx.defectParams.blob, ctx.defectParams.filter, out.morphMask.size());
     out.blobMask = maskFromCandidates(out.morphMask.size(), out.candidates, labels);

@@ -15,7 +15,7 @@ namespace cutdie {
 namespace fs = std::filesystem;
 
 inline constexpr int kDetectTarget = 8000;
-inline constexpr const char* kDefaultDir = "C:/Users/aspiring135/Desktop/datasets/10um-gray";
+inline constexpr const char* kDefaultDir = ".";
 
 enum class AlignMethod { PhaseCuda, PhaseCpu, EccCuda, EccCpu };
 enum class HistogramMethod { Auto, Cpu, Cuda };
@@ -81,7 +81,7 @@ struct Options {
     fs::path eval_patch_dir;
     fs::path eval_truth_dir;
 
-    // 检出配方。默认值与各模块原参数一致，实际以 main 中赋值为准。
+    // 检出配方。默认值与各模块原参数一致，生产配方由 die_config.cpp 统一设置。
     HistogramThresholdParams histogram = histogramThresholdDefaultParams();
     EccAlignParams ecc;
     DefectDetectParams defect;

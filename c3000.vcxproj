@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
@@ -24,21 +16,9 @@
     <ProjectGuid>{91a7a687-a40c-438a-ba17-3c31e313b458}</ProjectGuid>
     <RootNamespace>cutdiepg</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <CudaVersion Condition="'$(CudaVersion)'==''">12.8</CudaVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -54,15 +34,9 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 11.8.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).props" />
   </ImportGroup>
   <ImportGroup Label="Shared">
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -72,40 +46,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <OpenCVRoot>C:\development\opencv-4.14.0-windows\build</OpenCVRoot>
+    <OpenCVRoot Condition="'$(OpenCVRoot)'=='' and '$(OpenCV_DIR)'!=''">$(OpenCV_DIR)</OpenCVRoot>
+    <OpenCVRoot Condition="'$(OpenCVRoot)'==''">C:\development\opencv-4.14.0-windows\build</OpenCVRoot>
+    <OpenCVVersion Condition="'$(OpenCVVersion)'==''">4140</OpenCVVersion>
+    <OpenCVToolset Condition="'$(OpenCVToolset)'==''">vc16</OpenCVToolset>
+    <CudaCodeGeneration Condition="'$(CudaCodeGeneration)'==''">compute_86,sm_86</CudaCodeGeneration>
   </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -120,18 +66,20 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenCVRoot)\x64\vc16\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>cudart_static.lib;cufft.lib;opencv_world4140d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OpenCVRoot)\x64\$(OpenCVToolset)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>cufft.lib;opencv_world$(OpenCVVersion)d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalOptions>-allow-unsupported-compiler %(AdditionalOptions)</AdditionalOptions>
       <Defines>_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH;%(Defines)</Defines>
       <AdditionalIncludeDirectories>$(ProjectDir)inspect;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <CodeGeneration>compute_86,sm_86</CodeGeneration>
+      <CodeGeneration>$(CudaCodeGeneration)</CodeGeneration>
+      <HostDebugInfo>false</HostDebugInfo>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
     </CudaCompile>
     <PostBuildEvent>
-      <Command>copy /Y "$(OpenCVRoot)\x64\vc16\bin\opencv_world4140d.dll" "$(OutDir)"</Command>
+      <Command>copy /Y "$(OpenCVRoot)\x64\$(OpenCVToolset)\bin\opencv_world$(OpenCVVersion)d.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -150,56 +98,42 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenCVRoot)\x64\vc16\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>cudart_static.lib;cufft.lib;opencv_world4140.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OpenCVRoot)\x64\$(OpenCVToolset)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>cufft.lib;opencv_world$(OpenCVVersion).lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalOptions>-allow-unsupported-compiler -O3 %(AdditionalOptions)</AdditionalOptions>
       <Defines>_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH;%(Defines)</Defines>
       <AdditionalIncludeDirectories>$(ProjectDir)inspect;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <CodeGeneration>compute_86,sm_86</CodeGeneration>
+      <CodeGeneration>$(CudaCodeGeneration)</CodeGeneration>
     </CudaCompile>
     <PostBuildEvent>
-      <Command>copy /Y "$(OpenCVRoot)\x64\vc16\bin\opencv_world4140.dll" "$(OutDir)"</Command>
+      <Command>copy /Y "$(OpenCVRoot)\x64\$(OpenCVToolset)\bin\opencv_world$(OpenCVVersion).dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\die_cli.cpp" />
+    <ClCompile Include="src\die_config.cpp" />
     <ClCompile Include="src\die_app.cpp" />
     <ClCompile Include="src\die_cut.cpp" />
-    <ClCompile Include="src\die_inspect.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
+    <ClCompile Include="src\die_inspect.cpp" />
     <ClCompile Include="src\die_map.cpp" />
     <ClCompile Include="src\die_util.cpp" />
-    <ClCompile Include="inspect\DefectDetect.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="inspect\EccAlign.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="inspect\HistogramThreshold.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="inspect\IntensityNormalize.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="inspect\PhaseCorrelate.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="inspect\Pipeline.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="inspect\Mssim.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="inspect\SelfCheck.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
+    <ClCompile Include="inspect\DefectDetect.cpp" />
+    <ClCompile Include="inspect\EccAlign.cpp" />
+    <ClCompile Include="inspect\HistogramThreshold.cpp" />
+    <ClCompile Include="inspect\IntensityNormalize.cpp" />
+    <ClCompile Include="inspect\PhaseCorrelate.cpp" />
+    <ClCompile Include="inspect\Pipeline.cpp" />
+    <ClCompile Include="inspect\Mssim.cpp" />
+    <ClCompile Include="inspect\SelfCheck.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\die_app.h" />
+    <ClInclude Include="include\die_cli.h" />
+    <ClInclude Include="include\die_config.h" />
     <ClInclude Include="include\die_cut.h" />
     <ClInclude Include="include\die_inspect.h" />
     <ClInclude Include="include\die_map.h" />
@@ -220,24 +154,14 @@
     <ClInclude Include="inspect\SelfCheck.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="inspect\EccAlign.cu">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </CudaCompile>
-    <CudaCompile Include="inspect\HistogramThreshold.cu">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </CudaCompile>
-    <CudaCompile Include="inspect\IntensityNormalize.cu">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </CudaCompile>
-    <CudaCompile Include="inspect\PhaseCorrelate.cu">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </CudaCompile>
-    <CudaCompile Include="inspect\Mssim.cu">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </CudaCompile>
+    <CudaCompile Include="inspect\EccAlign.cu" />
+    <CudaCompile Include="inspect\HistogramThreshold.cu" />
+    <CudaCompile Include="inspect\IntensityNormalize.cu" />
+    <CudaCompile Include="inspect\PhaseCorrelate.cu" />
+    <CudaCompile Include="inspect\Mssim.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 11.8.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).targets" />
   </ImportGroup>
 </Project>

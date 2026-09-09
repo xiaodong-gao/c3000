@@ -15,12 +15,15 @@
 namespace cutdie {
 namespace {
 
-void clear_old_pngs(const fs::path& dir) {
+void clear_old_patches(const fs::path& dir, const std::string& image_stem) {
     if (!fs::exists(dir)) {
         return;
     }
+    const std::string prefix = image_stem + "_die_x";
     for (const auto& entry : fs::directory_iterator(dir)) {
-        if (entry.is_regular_file() && is_png(entry.path())) {
+        const std::string name = entry.path().filename().string();
+        if (entry.is_regular_file() && is_png(entry.path()) && name.rfind(prefix, 0) == 0 &&
+            name.find("_y", prefix.size()) != std::string::npos) {
             std::error_code ec;
             fs::remove(entry.path(), ec);
         }
@@ -163,7 +166,7 @@ CutResult cut_patches(const Options& opt, double resolution_um) {
     result.boxes = boxes;
     fs::create_directories(opt.out);
     fs::create_directories(result.patch_dir);
-    clear_old_pngs(result.patch_dir);
+    clear_old_patches(result.patch_dir, opt.image.stem().string());
 
     const double inv = 1.0 / scale;
     const auto overlay = draw_overlay(

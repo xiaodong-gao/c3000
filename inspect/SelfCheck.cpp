@@ -1,5 +1,6 @@
 #include "SelfCheck.hpp"
 
+#include "die_cli.h"
 #include "die_inspect.h"
 
 #include "DefectDetect.hpp"
@@ -18,7 +19,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -31,6 +34,8 @@ struct TestStats {
     int passed = 0;
     int failed = 0;
 };
+
+void check(TestStats& stats, bool ok, const std::string& name, const std::string& detail);
 
 cv::Mat makePattern(int width, int height, bool binary) {
     cv::Mat img(height, width, CV_8UC1, cv::Scalar(binary ? 0 : 32));
@@ -68,7 +73,10 @@ template <typename Fn>
 double benchmarkMedian(int iters, bool synchronizeCuda, Fn&& fn) {
     fn();
     if (synchronizeCuda) {
-        cudaDeviceSynchronize();
+        const cudaError_t status = cudaDeviceSynchronize();
+        if (status != cudaSuccess) {
+            throw std::runtime_error(cudaGetErrorString(status));
+        }
     }
     std::vector<double> samples;
     samples.reserve(static_cast<size_t>(iters));
@@ -76,12 +84,73 @@ double benchmarkMedian(int iters, bool synchronizeCuda, Fn&& fn) {
         const auto t0 = std::chrono::steady_clock::now();
         fn();
         if (synchronizeCuda) {
-            cudaDeviceSynchronize();
+            const cudaError_t status = cudaDeviceSynchronize();
+            if (status != cudaSuccess) {
+                throw std::runtime_error(cudaGetErrorString(status));
+            }
         }
         const auto t1 = std::chrono::steady_clock::now();
         samples.push_back(std::chrono::duration<double, std::milli>(t1 - t0).count());
     }
     return medianMs(samples);
+}
+
+std::string environmentValue(const char* name) {
+#ifdef _WIN32
+    char* value = nullptr;
+    size_t length = 0;
+    if (_dupenv_s(&value, &length, name) != 0 || !value) {
+        return {};
+    }
+    const std::string result(value);
+    std::free(value);
+    return result;
+#else
+    const char* value = std::getenv(name);
+    return value ? value : "";
+#endif
+}
+
+void testCommandLine(TestStats& stats) {
+    const cutdie::CommandLine empty = cutdie::parse_command_line({});
+    check(stats, empty.mode == cutdie::RunMode::Help, "cli defaults to help",
+          "empty arguments did not select help");
+
+    const cutdie::CommandLine bench =
+        cutdie::parse_command_line({"--benchmark", "12"});
+    check(stats, bench.mode == cutdie::RunMode::Benchmark && bench.benchmark_iterations == 12,
+          "cli benchmark mode", "mode/iterations mismatch");
+
+    const cutdie::CommandLine process = cutdie::parse_command_line(
+        {"--dir", "samples", "--resolution-um", "25", "--align", "ecc-cuda",
+         "--histogram", "auto", "--normalize", "cuda", "--template-neighbor", "3",
+         "--recursive"});
+    check(stats,
+          process.mode == cutdie::RunMode::Process && process.options.image.empty() &&
+              process.options.xml.empty() && process.options.dir == "samples" &&
+              process.options.resolution_um == 25.0 &&
+              process.options.align_method == cutdie::AlignMethod::EccCuda &&
+              process.options.histogram_method == cutdie::HistogramMethod::Auto &&
+              process.options.normalize_method == cutdie::NormalizeMethod::Cuda &&
+              process.options.template_neighbor && process.options.template_neighbor_min == 3 &&
+              process.options.recursive,
+          "cli processing overrides", "parsed options mismatch");
+
+    bool rejected = false;
+    try {
+        (void)cutdie::parse_command_line({"--benchmark", "0"});
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    check(stats, rejected, "cli rejects invalid iterations", "--benchmark 0 was accepted");
+
+    rejected = false;
+    try {
+        (void)cutdie::parse_command_line({"--dir", "samples", "--resolution-um", "inf"});
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    check(stats, rejected, "cli rejects non-finite resolution", "infinite resolution was accepted");
 }
 
 void check(TestStats& stats, bool ok, const std::string& name, const std::string& detail) {
@@ -218,6 +287,33 @@ void testPhaseSubpixel(TestStats& stats, PhaseCorrelateCuda& cuda) {
               "phase-cuda |subpixel| (2.40,-1.60)");
 }
 
+void testPhaseLargeShifts(TestStats& stats, PhaseCorrelateCuda& cuda) {
+    cv::Mat tmpl(256, 256, CV_8UC1);
+    cv::RNG rng(0xC3000);
+    rng.fill(tmpl, cv::RNG::UNIFORM, 0, 256);
+    cv::GaussianBlur(tmpl, tmpl, cv::Size(5, 5), 1.0);
+
+    const cv::Point2d cases[] = {
+        {20.0, -17.0}, {-23.0, 18.0}, {19.0, 22.0}, {-21.0, -20.0},
+    };
+    for (const cv::Point2d& gt : cases) {
+        const cv::Mat data = shifted(tmpl, gt, cv::INTER_LINEAR);
+        double cpuResponse = 0.0;
+        double gpuResponse = 0.0;
+        const cv::Point2d cpu = phaseShiftBinary(tmpl, data, &cpuResponse);
+        const cv::Point2d gpu =
+            cudaShift(cuda, tmpl, data, &gpuResponse, stats, "phase-cuda large shift");
+        const cv::Point2d expected(-gt.x, -gt.y);
+        const std::string suffix = " (" + std::to_string(static_cast<int>(gt.x)) + "," +
+                                   std::to_string(static_cast<int>(gt.y)) + ")";
+        checkShift(stats, cpu, expected, 0.65, "phase-cpu large shift" + suffix);
+        checkShift(stats, gpu, expected, 0.65, "phase-cuda large shift" + suffix);
+        checkShift(stats, gpu, cpu, 0.30, "phase cpu vs cuda large shift" + suffix);
+        check(stats, cpuResponse > 0.0 && gpuResponse > 0.0,
+              "phase large-shift response" + suffix, "response <= 0");
+    }
+}
+
 void testEccShift(TestStats& stats, EccAlignCuda& eccCuda) {
     const cv::Mat tmpl = makePattern(256, 256, false);
     const cv::Point2d cases[] = {{3.0, -2.0}, {1.5, 2.5}, {-2.0, 1.0}};
@@ -270,6 +366,34 @@ void testEccShift(TestStats& stats, EccAlignCuda& eccCuda) {
         zeroGpu.ok && zeroCpu.ok) {
         checkShift(stats, cv::Point2d(zeroGpu.dx, zeroGpu.dy), cv::Point2d(0, 0), 0.15,
                    "ecc-cuda zero shift");
+    }
+}
+
+void testEccWorkspaceIsolation(TestStats& stats) {
+    EccCudaParams p3 = eccCudaDefaultParams();
+    p3.maxIters = 20;
+    p3.gaussFiltSize = 3;
+    EccCudaParams p7 = p3;
+    p7.gaussFiltSize = 7;
+    EccAlignCuda ecc3(p3);
+    EccAlignCuda ecc7(p7);
+
+    const cv::Mat tmpl = makePattern(256, 256, false);
+    const cv::Mat data = shifted(tmpl, cv::Point2d(2.5, -1.5), cv::INTER_LINEAR);
+    EccCudaResult first{};
+    EccCudaResult middle{};
+    EccCudaResult second{};
+    const cudaError_t s1 = ecc3.compute(tmpl.data, data.data, tmpl.cols, tmpl.rows, first);
+    const cudaError_t s2 = ecc7.compute(tmpl.data, data.data, tmpl.cols, tmpl.rows, middle);
+    const cudaError_t s3 = ecc3.compute(tmpl.data, data.data, tmpl.cols, tmpl.rows, second);
+    check(stats,
+          s1 == cudaSuccess && s2 == cudaSuccess && s3 == cudaSuccess && first.ok && middle.ok &&
+              second.ok,
+          "ecc independent workspaces run", "one of the alternating calls failed");
+    if (s1 == cudaSuccess && s3 == cudaSuccess && first.ok && second.ok) {
+        checkShift(stats, cv::Point2d(second.dx, second.dy), cv::Point2d(first.dx, first.dy),
+                   1e-5, "ecc gaussian workspace isolation");
+        checkNear(stats, second.cc, first.cc, 1e-8, "ecc workspace cc stability");
     }
 }
 
@@ -708,6 +832,29 @@ void testDefectDetect(TestStats& stats) {
           "large white skipped when disabled", "still emitted candidates");
 }
 
+void testCandidateLabelReuse(TestStats& stats) {
+    cv::Mat mask = cv::Mat::zeros(128, 160, CV_8UC1);
+    cv::rectangle(mask, cv::Rect(12, 15, 20, 18), cv::Scalar(255), cv::FILLED);
+    cv::rectangle(mask, cv::Rect(91, 70, 31, 24), cv::Scalar(255), cv::FILLED);
+    cv::Mat l2(mask.size(), CV_32FC1, cv::Scalar(25.0f));
+    cv::Mat labels;
+    const std::vector<DefectCandidate> candidates =
+        extractDefectCandidates(mask, l2, {}, {}, {}, &labels);
+    const cv::Mat rebuilt = maskFromCandidates(mask.size(), candidates, labels);
+    check(stats, candidates.size() == 2, "candidate extraction component count",
+          "n=" + std::to_string(candidates.size()));
+    check(stats, !labels.empty() && labels.type() == CV_32SC1,
+          "candidate extraction returns labels", "labels missing or wrong type");
+    check(stats, cv::countNonZero(mask != rebuilt) == 0, "candidate label reuse exact mask",
+          "rebuilt mask differs");
+
+    cv::Mat wrongSize(32, 32, CV_32FC1, cv::Scalar(1.0f));
+    labels = cv::Mat::ones(mask.size(), CV_32SC1);
+    const auto invalid = extractDefectCandidates(mask, wrongSize, {}, {}, {}, &labels);
+    check(stats, invalid.empty() && labels.empty(), "candidate rejects mismatched maps",
+          "invalid input was accepted");
+}
+
 cv::Mat makeScene(int width, int height, bool color) {
     cv::Mat gray = makePattern(width, height, false);
     if (!color) {
@@ -860,6 +1007,16 @@ void testEndToEndPipeline(TestStats& stats, PipelineContext& ctx) {
     }
 }
 
+void testPipelineRejectsFlatPhaseInput(TestStats& stats, PipelineContext& ctx) {
+    const cv::Mat flat(128, 128, CV_8UC1, cv::Scalar(80));
+    const PipelineOutput cpu =
+        runD2DPipeline(flat, flat, PipelineBackend::Cpu, PipelineAlign::Phase, ctx);
+    const PipelineOutput gpu =
+        runD2DPipeline(flat, flat, PipelineBackend::Cuda, PipelineAlign::Phase, ctx);
+    check(stats, !cpu.ok && !gpu.ok, "phase pipeline rejects flat input",
+          "cpu=" + std::to_string(cpu.ok) + " cuda=" + std::to_string(gpu.ok));
+}
+
 void testInspectWaferOverlay(TestStats& stats) {
     printf("\n--- inspect wafer overlay (merged c3000 path) ---\n");
 
@@ -938,12 +1095,16 @@ void testInspectWaferOverlay(TestStats& stats) {
 }
 
 void testRealSmallDarkSpot(TestStats& stats, PipelineContext& ctx) {
-    const std::filesystem::path dataPath(
-        "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050/patches/0050_die_x12_y2.png");
-    const std::filesystem::path tmplPath(
-        "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050/patches/0050_die_x0_y12.png");
+    const std::string fixtureDir = environmentValue("C3000_TEST_DATA_DIR");
+    if (fixtureDir.empty()) {
+        printf("skip real dark-spot (C3000_TEST_DATA_DIR not set)\n");
+        return;
+    }
+    const std::filesystem::path fixtureRoot(fixtureDir);
+    const std::filesystem::path dataPath = fixtureRoot / "0050_die_x12_y2.png";
+    const std::filesystem::path tmplPath = fixtureRoot / "0050_die_x0_y12.png";
     if (!std::filesystem::exists(dataPath) || !std::filesystem::exists(tmplPath)) {
-        printf("skip real dark-spot (dataset patch missing)\n");
+        printf("skip real dark-spot (fixture files missing in C3000_TEST_DATA_DIR)\n");
         return;
     }
 
@@ -1016,15 +1177,20 @@ int runRegressionTests() {
     ctx.eccCuda = &eccCuda;
     ctx.intensityCuda = &intensityCuda;
 
+    testCommandLine(stats);
     testPhaseZeroShift(stats, phaseCuda);
     testPhaseKnownShifts(stats, phaseCuda);
     testPhaseSubpixel(stats, phaseCuda);
+    testPhaseLargeShifts(stats, phaseCuda);
     testEccShift(stats, eccCuda);
+    testEccWorkspaceIsolation(stats);
     testHistogramRules(stats, hist);
     testHistogramApplyAndColor(stats, hist);
     testIntensityNormalize(stats, intensityCuda);
     testMssimAndOverlap(stats, mssimCuda);
     testDefectDetect(stats);
+    testCandidateLabelReuse(stats);
+    testPipelineRejectsFlatPhaseInput(stats, ctx);
     testEndToEndPipeline(stats, ctx);
     testInspectWaferOverlay(stats);
     testRealSmallDarkSpot(stats, ctx);
@@ -1034,6 +1200,10 @@ int runRegressionTests() {
 }
 
 int runBenchmark(int iters) {
+    if (iters <= 0) {
+        fprintf(stderr, "benchmark iterations must be positive\n");
+        return 2;
+    }
     printf("\n=== benchmark (median of %d iters, after 1 warmup) ===\n", iters);
     if (cudaSetDevice(0) != cudaSuccess) {
         fprintf(stderr, "cudaSetDevice failed\n");
@@ -1064,25 +1234,80 @@ int runBenchmark(int iters) {
         const cv::Mat tmplGray = makePattern(size, size, false);
         const int nPixels = size * size;
         HistogramThresholdResult histResult{};
+        PhaseCorrelateResult phaseResult{};
+        cudaError_t phaseStatus = cudaSuccess;
+        cudaError_t histogramStatus = cudaSuccess;
+        cudaError_t applyStatus = cudaSuccess;
         cv::Mat binary(size, size, CV_8UC1);
 
         const double cpuMs = benchmarkMedian(iters, false, [&]() {
             phaseShiftBinary(tmplBin, dataBin, nullptr);
         });
         const double gpuMs = benchmarkMedian(iters, true, [&]() {
-            PhaseCorrelateResult result{};
-            phaseCuda.compute(tmplBin.data, dataBin.data, size, size, result);
+            phaseStatus = phaseCuda.compute(tmplBin.data, dataBin.data, size, size, phaseResult);
         });
         const double histMs = benchmarkMedian(iters, true,
-            [&]() { hist.computeFromGray(tmplGray.data, size, size, histResult); });
+            [&]() { histogramStatus = hist.computeFromGray(tmplGray.data, size, size, histResult); });
         const double applyMs = benchmarkMedian(iters, true, [&]() {
-            hist.apply(tmplGray.data, nPixels, histResult.threshold > 0 ? histResult.threshold : 125,
-                       binary.data);
+            applyStatus = hist.apply(tmplGray.data, nPixels,
+                                     histResult.threshold > 0 ? histResult.threshold : 125,
+                                     binary.data);
         });
+        if (phaseStatus != cudaSuccess || histogramStatus != cudaSuccess ||
+            applyStatus != cudaSuccess) {
+            fprintf(stderr, "phase/histogram benchmark failed at %d^2\n", size);
+            return 1;
+        }
 
         const double speedup = gpuMs > 1e-9 ? cpuMs / gpuMs : 0.0;
         printf("%4d^2 %10.3f ms %10.3f ms %9.2fx %10.3f ms %10.3f ms\n", size, cpuMs, gpuMs, speedup,
                histMs, applyMs);
+    }
+
+    printf("\n=== connected-components candidate extraction ===\n");
+    printf("%-8s %14s %14s %10s\n", "size", "legacy-2pass", "reuse-1pass", "speedup");
+    printf("%-8s %14s %14s %10s\n", "--------", "--------------", "--------------",
+           "----------");
+    for (int size : sizes) {
+        cv::Mat mask = cv::Mat::zeros(size, size, CV_8UC1);
+        for (int y = 8; y + 8 < size; y += 24) {
+            for (int x = 8; x + 8 < size; x += 24) {
+                cv::rectangle(mask, cv::Rect(x, y, 7, 7), cv::Scalar(255), cv::FILLED);
+            }
+        }
+        cv::Mat l2(mask.size(), CV_32FC1, cv::Scalar(25.0f));
+        BlobFilterParams filter;
+        filter.minArea = 1;
+        filter.maxArea = 0;
+        filter.minWidth = 1;
+        filter.minHeight = 1;
+        filter.maxAspectRatio = 100.0;
+        filter.borderMargin = 0;
+        cv::Mat legacyMask;
+        cv::Mat reuseMask;
+
+        const double legacyMs = benchmarkMedian(iters, false, [&]() {
+            cv::Mat labels;
+            cv::Mat componentStats;
+            cv::Mat centroids;
+            cv::connectedComponentsWithStats(mask, labels, componentStats, centroids, 8, CV_32S);
+            const auto raw = extractDefectCandidates(mask, l2);
+            const auto kept = filterDefects(raw, filter, {}, mask.size());
+            legacyMask = maskFromCandidates(mask.size(), kept, labels);
+        });
+        const double reuseMs = benchmarkMedian(iters, false, [&]() {
+            cv::Mat labels;
+            const auto raw = extractDefectCandidates(mask, l2, {}, {}, {}, &labels);
+            const auto kept = filterDefects(raw, filter, {}, mask.size());
+            reuseMask = maskFromCandidates(mask.size(), kept, labels);
+        });
+        if (legacyMask.empty() || reuseMask.empty() ||
+            cv::countNonZero(legacyMask != reuseMask) != 0) {
+            fprintf(stderr, "connected-components benchmark produced mismatched output\n");
+            return 1;
+        }
+        printf("%4d^2 %12.3f ms %12.3f ms %9.2fx\n", size, legacyMs, reuseMs,
+               reuseMs > 1e-9 ? legacyMs / reuseMs : 0.0);
     }
 
     printf("\n%-8s %12s %12s %10s\n", "size", "ecc-cpu", "ecc-cuda", "speedup");
@@ -1093,11 +1318,18 @@ int runBenchmark(int iters) {
         }
         const cv::Mat tmplGray = makePattern(size, size, false);
         const cv::Mat dataGray = shifted(tmplGray, cv::Point2d(3.0, -2.0), cv::INTER_LINEAR);
-        const double cpuMs = benchmarkMedian(iters, false, [&]() { eccShift(tmplGray, dataGray); });
+        EccAlignResult cpuResult;
+        EccCudaResult gpuResult{};
+        cudaError_t gpuStatus = cudaSuccess;
+        const double cpuMs =
+            benchmarkMedian(iters, false, [&]() { cpuResult = eccShift(tmplGray, dataGray); });
         const double gpuMs = benchmarkMedian(iters, true, [&]() {
-            EccCudaResult ecc{};
-            eccCuda.compute(tmplGray.data, dataGray.data, size, size, ecc);
+            gpuStatus = eccCuda.compute(tmplGray.data, dataGray.data, size, size, gpuResult);
         });
+        if (!cpuResult.ok || gpuStatus != cudaSuccess || !gpuResult.ok) {
+            fprintf(stderr, "ECC benchmark failed at %d^2\n", size);
+            return 1;
+        }
         const double speedup = gpuMs > 1e-9 ? cpuMs / gpuMs : 0.0;
         printf("%4d^2 %10.3f ms %10.3f ms %9.2fx\n", size, cpuMs, gpuMs, speedup);
     }
@@ -1125,6 +1357,10 @@ int runBenchmark(int iters) {
             const double gpuMs = benchmarkMedian(
                 iters, true,
                 [&]() { gpuResult = intensityNormalizeCuda(intensityCuda, reference, source); });
+            if (!cpuResult.ok || !gpuResult.ok) {
+                fprintf(stderr, "normalization benchmark failed at %d^2/%dch\n", size, channels);
+                return 1;
+            }
             const double speedup = gpuMs > 1e-9 ? cpuMs / gpuMs : 0.0;
             printf("%4d^2 %8d %12.3f ms %12.3f ms %9.2fx\n", size, channels, cpuMs,
                    gpuMs, speedup);
@@ -1143,18 +1379,25 @@ int runBenchmark(int iters) {
         gpuResult.map.create(size, size, CV_32F);
         cv::Mat fusionCpu;
         cv::Mat fusionGpu(a.size(), a.type());
+        cudaError_t computeStatus = cudaSuccess;
+        cudaError_t fuseStatus = cudaSuccess;
 
         const double cpuMs =
             benchmarkMedian(iters, false, [&]() { cpuResult = computeMssim(a, b); });
         const double gpuMs = benchmarkMedian(iters, true, [&]() {
-            mssimCuda.compute(a.data, b.data, size, size, 1, gpuResult.map.ptr<float>(),
-                              gpuResult.mssim);
+            computeStatus = mssimCuda.compute(a.data, b.data, size, size, 1,
+                                              gpuResult.map.ptr<float>(), gpuResult.mssim);
         });
         const double fuseCpuMs = benchmarkMedian(
             iters, false, [&]() { fusionCpu = fuseByMssim(a, b, cpuResult.map); });
         const double fuseGpuMs = benchmarkMedian(iters, true, [&]() {
-            mssimCuda.fuse(a.data, b.data, gpuResult.map.ptr<float>(), size, size, 1, fusionGpu.data);
+            fuseStatus = mssimCuda.fuse(a.data, b.data, gpuResult.map.ptr<float>(), size, size, 1,
+                                        fusionGpu.data);
         });
+        if (cpuResult.map.empty() || computeStatus != cudaSuccess || fuseStatus != cudaSuccess) {
+            fprintf(stderr, "MSSIM benchmark failed at %d^2\n", size);
+            return 1;
+        }
         const double speedup = gpuMs > 1e-9 ? cpuMs / gpuMs : 0.0;
         printf("%4d^2 %10.3f ms %10.3f ms %9.2fx %10.3f ms %10.3f ms\n", size, cpuMs, gpuMs, speedup,
                fuseCpuMs, fuseGpuMs);
@@ -1185,11 +1428,25 @@ int runBenchmark(int iters) {
             PipelineOutput gpuOut;
 
             const double cpuMs = benchmarkMedian(iters, false, [&]() {
-                cpuOut = runD2DPipeline(tmpl, data, PipelineBackend::Cpu, align, ctx, true);
+                cpuOut = runD2DPipeline(tmpl, data, PipelineBackend::Cpu, align, ctx, false);
             });
             const double gpuMs = benchmarkMedian(iters, true, [&]() {
-                gpuOut = runD2DPipeline(tmpl, data, PipelineBackend::Cuda, align, ctx, true);
+                gpuOut = runD2DPipeline(tmpl, data, PipelineBackend::Cuda, align, ctx, false);
             });
+            if (!cpuOut.ok || !gpuOut.ok) {
+                fprintf(stderr, "pipeline benchmark failed at %d^2 (%s): cpu=%s cuda=%s\n", size,
+                        pipelineAlignName(align), cpuOut.error.c_str(), gpuOut.error.c_str());
+                return 1;
+            }
+            // Stage timings are sampled separately because enabling them synchronizes CUDA at
+            // every stage and would otherwise distort the end-to-end median above.
+            cpuOut = runD2DPipeline(tmpl, data, PipelineBackend::Cpu, align, ctx, true);
+            gpuOut = runD2DPipeline(tmpl, data, PipelineBackend::Cuda, align, ctx, true);
+            if (!cpuOut.ok || !gpuOut.ok) {
+                fprintf(stderr, "pipeline stage timing failed at %d^2 (%s)\n", size,
+                        pipelineAlignName(align));
+                return 1;
+            }
             const double speedup = gpuMs > 1e-9 ? cpuMs / gpuMs : 0.0;
             printf(" %4d^2 %-6s %-7s %8.3f %9.3f %9.3f %9.3f %9.3f %9.3f\n", size,
                    pipelineAlignName(align), "cpu", cpuMs, cpuOut.timing.histMs,

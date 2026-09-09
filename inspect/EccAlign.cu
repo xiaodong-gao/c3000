@@ -17,8 +17,6 @@ constexpr int kMaxRadius = 7;
         }                                \
     } while (0)
 
-__constant__ float cGauss[2 * kMaxRadius + 1];
-
 struct ReducePack {
     double count;
     double sumW;
@@ -49,6 +47,7 @@ struct DeviceWorkspace {
     float* dWarped = nullptr;
     float* dGxW = nullptr;
     float* dGyW = nullptr;
+    float* dGauss = nullptr;
     ReducePack* dRed = nullptr;
     size_t u8Cap = 0;
     size_t maskCap = 0;
@@ -89,6 +88,9 @@ struct DeviceWorkspace {
         if (!dRed) {
             CUDA_CHECK(cudaMalloc(&dRed, sizeof(ReducePack)));
         }
+        if (!dGauss) {
+            CUDA_CHECK(cudaMalloc(&dGauss, sizeof(float) * (2 * kMaxRadius + 1)));
+        }
         width = w;
         height = h;
         return cudaSuccess;
@@ -98,9 +100,11 @@ struct DeviceWorkspace {
         cudaFree(dTmplU8);
         cudaFree(dMask);
         cudaFree(dTmpl);
+        cudaFree(dGauss);
         cudaFree(dRed);
         dTmplU8 = dDataU8 = dMask = nullptr;
         dTmpl = dData = dTmp = dGx = dGy = dWarped = dGxW = dGyW = nullptr;
+        dGauss = nullptr;
         dRed = nullptr;
         u8Cap = maskCap = floatCap = 0;
         width = height = 0;
@@ -140,7 +144,8 @@ cudaError_t uploadGauss(int ksize, DeviceWorkspace& ws) {
     for (int i = 0; i < 2 * radius + 1; ++i) {
         host[i] *= inv;
     }
-    CUDA_CHECK(cudaMemcpyToSymbol(cGauss, host, sizeof(host)));
+    CUDA_CHECK(cudaMemcpy(ws.dGauss, host, sizeof(float) * static_cast<size_t>(ksize),
+                          cudaMemcpyHostToDevice));
     ws.gaussSize = ksize;
     return cudaSuccess;
 }
@@ -193,28 +198,28 @@ __global__ void u8ToFloatKernel(const unsigned char* __restrict__ src, float* __
 }
 
 __global__ void gaussHorizontalKernel(const float* __restrict__ src, float* __restrict__ dst, int w,
-                                      int h, int radius) {
+                                      int h, int radius, const float* __restrict__ gauss) {
     const int n = w * h;
     for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += blockDim.x * gridDim.x) {
         const int x = i % w;
         const int y = i / w;
         float acc = 0.0f;
         for (int k = -radius; k <= radius; ++k) {
-            acc += src[y * w + reflect101(x + k, w)] * cGauss[k + radius];
+            acc += src[y * w + reflect101(x + k, w)] * gauss[k + radius];
         }
         dst[i] = acc;
     }
 }
 
 __global__ void gaussVerticalKernel(const float* __restrict__ src, float* __restrict__ dst, int w,
-                                    int h, int radius) {
+                                    int h, int radius, const float* __restrict__ gauss) {
     const int n = w * h;
     for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += blockDim.x * gridDim.x) {
         const int x = i % w;
         const int y = i / w;
         float acc = 0.0f;
         for (int k = -radius; k <= radius; ++k) {
-            acc += src[reflect101(y + k, h) * w + x] * cGauss[k + radius];
+            acc += src[reflect101(y + k, h) * w + x] * gauss[k + radius];
         }
         dst[i] = acc;
     }
@@ -336,10 +341,10 @@ __global__ void statsKernel(const float* __restrict__ warped, const float* __res
 cudaError_t blur(DeviceWorkspace& ws, float* srcDst, int n, int ksize) {
     const int radius = ksize / 2;
     gaussHorizontalKernel<<<launchGrid(n), kBlockSize>>>(srcDst, ws.dTmp, ws.width, ws.height,
-                                                         radius);
+                                                         radius, ws.dGauss);
     CUDA_CHECK(cudaGetLastError());
     gaussVerticalKernel<<<launchGrid(n), kBlockSize>>>(ws.dTmp, srcDst, ws.width, ws.height,
-                                                       radius);
+                                                       radius, ws.dGauss);
     CUDA_CHECK(cudaGetLastError());
     return cudaSuccess;
 }

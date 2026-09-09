@@ -1,0 +1,19 @@
+.vs/
+.vscode/
+
+# Visual Studio / CUDA build output
+x64/
+Win32/
+c3000/x64/
+c3000/Win32/
+*.VC.db
+*.VC.opendb
+*.suo
+
+# Generated inspection output
+output/
+patch_eval/
+patches/
+die_defects/
+*.tmp.png
+

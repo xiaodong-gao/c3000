@@ -140,11 +140,14 @@ cv::Mat morphologicalClean(const cv::Mat& binary, const MorphologicalParams& par
 
 cv::Mat blobFilter(const cv::Mat& binary, const BlobFilterParams& params = {});
 
+// labelsOut optionally receives the exact CV_32S component labels used to build candidates,
+// allowing callers to construct a filtered mask without running connected components again.
 std::vector<DefectCandidate> extractDefectCandidates(const cv::Mat& blobMask,
                                                      const cv::Mat& l2Difference,
                                                      const cv::Mat& signedDifference = {},
                                                      const cv::Mat& brightMask = {},
-                                                     const cv::Mat& darkMask = {});
+                                                     const cv::Mat& darkMask = {},
+                                                     cv::Mat* labelsOut = nullptr);
 
 std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
                                                       const LargeWhiteParams& params);

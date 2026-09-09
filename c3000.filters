@@ -21,6 +21,12 @@
     <ClCompile Include="src\main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\die_cli.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\die_config.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="src\die_app.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -63,6 +69,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\die_app.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\die_cli.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\die_config.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\die_cut.h">

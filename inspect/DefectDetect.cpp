@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstring>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include <opencv2/imgproc.hpp>
@@ -27,7 +26,11 @@ cv::Mat toBgr(const cv::Mat& src) {
         return src;
     }
     cv::Mat bgr;
-    cv::cvtColor(src, bgr, cv::COLOR_GRAY2BGR);
+    if (src.channels() == 1) {
+        cv::cvtColor(src, bgr, cv::COLOR_GRAY2BGR);
+    } else if (src.channels() == 4) {
+        cv::cvtColor(src, bgr, cv::COLOR_BGRA2BGR);
+    }
     return bgr;
 }
 
@@ -370,12 +373,10 @@ cv::Mat blobFilter(const cv::Mat& binary, const BlobFilterParams& params) {
         binary.convertTo(mask, CV_8U);
     }
 
-    const std::vector<DefectCandidate> all = extractDefectCandidates(mask, {});
-    const std::vector<DefectCandidate> kept = filterDefects(all, params, {}, mask.size());
     cv::Mat labels;
-    cv::Mat stats;
-    cv::Mat centroids;
-    cv::connectedComponentsWithStats(mask, labels, stats, centroids, 8, CV_32S);
+    const std::vector<DefectCandidate> all =
+        extractDefectCandidates(mask, {}, {}, {}, {}, &labels);
+    const std::vector<DefectCandidate> kept = filterDefects(all, params, {}, mask.size());
     return maskFromCandidates(mask.size(), kept, labels);
 }
 
@@ -383,9 +384,20 @@ std::vector<DefectCandidate> extractDefectCandidates(const cv::Mat& blobMask,
                                                      const cv::Mat& l2Difference,
                                                      const cv::Mat& signedDifference,
                                                      const cv::Mat& brightMask,
-                                                     const cv::Mat& darkMask) {
+                                                     const cv::Mat& darkMask,
+                                                     cv::Mat* labelsOut) {
     std::vector<DefectCandidate> candidates;
-    if (blobMask.empty()) {
+    if (labelsOut) {
+        labelsOut->release();
+    }
+    const auto sameSize = [&](const cv::Mat& image) {
+        return image.empty() || image.size() == blobMask.size();
+    };
+    if (blobMask.empty() || blobMask.type() != CV_8UC1 || !sameSize(l2Difference) ||
+        !sameSize(signedDifference) || !sameSize(brightMask) || !sameSize(darkMask) ||
+        (!signedDifference.empty() && signedDifference.type() != CV_32FC1) ||
+        (!brightMask.empty() && brightMask.type() != CV_8UC1) ||
+        (!darkMask.empty() && darkMask.type() != CV_8UC1)) {
         return candidates;
     }
 
@@ -400,6 +412,9 @@ std::vector<DefectCandidate> extractDefectCandidates(const cv::Mat& blobMask,
     cv::Mat centroids;
     const int count =
         cv::connectedComponentsWithStats(blobMask, labels, stats, centroids, 8, CV_32S);
+    if (labelsOut) {
+        *labelsOut = labels;
+    }
     candidates.reserve(static_cast<size_t>(std::max(0, count - 1)));
 
     int id = 0;
@@ -615,19 +630,33 @@ std::vector<DefectCandidate> filterDefects(const std::vector<DefectCandidate>& c
 cv::Mat maskFromCandidates(const cv::Size& size, const std::vector<DefectCandidate>& candidates,
                            const cv::Mat& labels) {
     cv::Mat mask = cv::Mat::zeros(size, CV_8UC1);
-    if (labels.empty() || labels.size() != size || candidates.empty()) {
+    if (labels.empty() || labels.size() != size || labels.type() != CV_32SC1 ||
+        candidates.empty()) {
         return mask;
     }
-    std::unordered_set<int> keep;
-    keep.reserve(candidates.size());
+
+    int maxLabel = 0;
     for (const auto& c : candidates) {
-        keep.insert(c.labelId);
+        maxLabel = std::max(maxLabel, c.labelId);
+    }
+    if (maxLabel <= 0) {
+        return mask;
+    }
+    if (static_cast<size_t>(maxLabel) > labels.total()) {
+        return mask;
+    }
+    std::vector<unsigned char> keep(static_cast<size_t>(maxLabel + 1), 0);
+    for (const auto& c : candidates) {
+        if (c.labelId > 0) {
+            keep[static_cast<size_t>(c.labelId)] = 1;
+        }
     }
     for (int y = 0; y < labels.rows; ++y) {
         const int* row = labels.ptr<int>(y);
         unsigned char* out = mask.ptr<unsigned char>(y);
         for (int x = 0; x < labels.cols; ++x) {
-            if (keep.count(row[x]) != 0) {
+            const int label = row[x];
+            if (label > 0 && label <= maxLabel && keep[static_cast<size_t>(label)] != 0) {
                 out[x] = 255;
             }
         }
@@ -691,11 +720,8 @@ DefectDetectOutput detectDefects(const cv::Mat& l2Difference, const cv::Mat& ove
     out.morphMask = mergeMorphWithDarkChannel(out.adaptiveMask, out.darkMask, params.morph);
 
     cv::Mat labels;
-    cv::Mat stats;
-    cv::Mat centroids;
-    cv::connectedComponentsWithStats(out.morphMask, labels, stats, centroids, 8, CV_32S);
     const std::vector<DefectCandidate> raw = extractDefectCandidates(
-        out.morphMask, l2, out.signedDifference, out.brightMask, out.darkMask);
+        out.morphMask, l2, out.signedDifference, out.brightMask, out.darkMask, &labels);
     out.candidates = filterDefects(raw, params.blob, params.filter, out.morphMask.size());
     out.blobMask = maskFromCandidates(out.morphMask.size(), out.candidates, labels);
     out.overlay =

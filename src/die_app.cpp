@@ -243,6 +243,10 @@ int run(Options opt) {
     }
     const double resolution_um = opt.resolution_um;
     const auto jobs = collect_jobs(opt);
+    TemplateCache external_templates;
+    if (opt.inspect && !opt.template_path.empty()) {
+        external_templates = load_templates(opt.template_path);
+    }
     std::cout << "共 " << jobs.size() << " 组 PNG/XML 待切割\n";
     std::cout << "分辨率: " << resolution_um << " um/px\n";
     int failed = 0;
@@ -255,9 +259,8 @@ int run(Options opt) {
         std::cout << "  XML: " << job.xml.string() << '\n';
         std::cout << "  输出: " << one.patch_out.string() << '\n';
         try {
-            TemplateCache templates;
+            TemplateCache templates = external_templates;
             if (one.inspect && !one.template_path.empty()) {
-                templates = load_templates(one.template_path);
                 std::cout << "  模板: " << one.template_path.string()
                           << (templates.single ? " (单模板已预载)" : " (按 die 匹配已预载)")
                           << '\n';

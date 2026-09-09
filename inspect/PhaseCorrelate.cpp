@@ -79,7 +79,8 @@ cv::Point2d phaseShiftBinary(const cv::Mat& templateBin, const cv::Mat& dataBin,
 
     const int w = corr.cols;
     const int h = corr.rows;
-    const int maxShift = std::max(16, std::min(48, std::min(w, h) / 8));
+    const int maxShift =
+        std::max(1, std::min(std::min(w, h), std::max(16, std::min(48, std::min(w, h) / 8))));
 
     struct Candidate {
         cv::Point loc;
@@ -114,7 +115,8 @@ cv::Point2d phaseShiftBinary(const cv::Mat& templateBin, const cv::Mat& dataBin,
     for (const Candidate& candidate : candidates) {
         const double bestMag = std::hypot(best->shift.x, best->shift.y);
         const double mag = std::hypot(candidate.shift.x, candidate.shift.y);
-        if (mag < bestMag - 1e-6 || (std::abs(mag - bestMag) <= 1e-6 && candidate.value > best->value)) {
+        if (candidate.value > best->value + 1e-12 ||
+            (std::abs(candidate.value - best->value) <= 1e-12 && mag < bestMag)) {
             best = &candidate;
         }
     }
