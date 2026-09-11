@@ -24,12 +24,12 @@ int main() {
         cutdie::Options opt;
 
         // ========== 输入 / 输出 ==========
-        opt.dir = "C:/Users/aspiring135/Desktop/datasets/10um-gray-test";
-        opt.image = "C:/Users/aspiring135/Desktop/datasets/10um-gray-test/0032.png";
-        opt.xml = "C:/Users/aspiring135/Desktop/datasets/10um-gray-test/0032.xml";
+        opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-gray";
+        opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050.png";
+        opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050.xml";
         opt.out.clear();                   // 空则写到 <图像目录>/<图像名>/
         opt.patch_out.clear();             // 空则写到 <out>/patches
-        opt.resolution_um = 10.0;          // 每个像素对应多少 um
+        opt.resolution_um = 50.0;          // 每个像素对应多少 um
         opt.keep_skipped = false;          // 是否保存 XML 中标记跳过的 die
         opt.recursive = false;             // 是否递归扫描输入目录
         opt.overlay_preview_px = 8000;     // die 预览图最长边；缺陷原图仍按原始分辨率保存
@@ -100,7 +100,7 @@ int main() {
         opt.defect.blob.minBrightArea = 400;  // 小亮斑多为邻居缺陷反相；真亮缺陷走 largeWhite
 
         // ========== 亮/暗缺陷过滤 ==========
-        // 0032 真值是暗底圆形白斑。D2D 关掉，只走 largeWhite
+        // 0051 是 33x33 patch，真值是暗底白点/块状。D2D 关掉，只走 largeWhite
         opt.defect.filter.keepBright = false;
         opt.defect.filter.keepDark = false;
         opt.defect.filter.keepMixed = false;
@@ -108,19 +108,20 @@ int main() {
         opt.defect.filter.minMeanL2 = 10.0;
         opt.defect.filter.minAbsMeanSigned = 8.0;
 
-        // ========== 白斑（0032：暗底上的圆形亮斑，峰值约 173–209）==========
-        // 29 颗真值；同颗可能有多颗（x9_y4 / x-6_y-6 / x5_y5 / x10_y0 / x-7_y5 / x-9_y-8）
-        // threshold=110：弱于 0002 近饱和白泡；x1_y10 峰值仅 173
-        // minArea=250：保住 x9_y4 较小那颗（~293）；贴边残圆 x8_y4 长宽比约 2.5
-        // x-3_y6 / x4_y3 / x6_y-8 也有同类小白点，面积/亮度与真值重叠，无法单靠门限滤掉
+        // ========== 白点 / 块状（0051：暗底浅小白点 + 片边块状）==========
+        // 灰度 threshold=70 抓块状；白帽单独提浅点，避免和亮核并成细长条被长宽比丢掉
+        // tophatMin=24、tophatFloor=50：压掉灰度 48–49 的晶粒尾巴，仍保留峰值 >=50 的浅白点
         opt.defect.largeWhite.enable = true;
-        opt.defect.largeWhite.threshold = 110.0;
-        opt.defect.largeWhite.minArea = 250;
-        opt.defect.largeWhite.minFill = 0.50;
-        opt.defect.largeWhite.maxAspectRatio = 6.0;
+        opt.defect.largeWhite.threshold = 70.0;
+        opt.defect.largeWhite.minArea = 1;
+        opt.defect.largeWhite.minFill = 0.20;
+        opt.defect.largeWhite.maxAspectRatio = 20.0;
         opt.defect.largeWhite.morphSize = 0;
         opt.defect.largeWhite.maxBackground = 0.0;
-        opt.defect.largeWhite.backgroundMargin = 12;
+        opt.defect.largeWhite.backgroundMargin = 4;
+        opt.defect.largeWhite.tophatSize = 7;
+        opt.defect.largeWhite.tophatMin = 24.0;
+        opt.defect.largeWhite.tophatFloor = 50.0;
 
         if (opt.resolution_um <= 0.0) {
             throw std::runtime_error("每个像素对应的 um 必须大于 0");

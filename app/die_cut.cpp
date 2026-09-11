@@ -52,7 +52,7 @@ cv::Mat draw_overlay(
     cv::Mat overlay;
     cv::cvtColor(gray, overlay, cv::COLOR_GRAY2BGR);
     cv::circle(overlay, cv::Point(cvRound(cx), cvRound(cy)), cvRound(radius),
-               cv::Scalar(255, 180, 0), 2);
+               cv::Scalar(255, 180, 0), 1);
     for (const auto& box : boxes) {
         const cv::Scalar color = box.skipped ? cv::Scalar(80, 80, 255) : cv::Scalar(90, 255, 0);
         cv::rectangle(
@@ -61,11 +61,6 @@ cv::Mat draw_overlay(
             cv::Point(box.right - 1, box.bottom - 1),
             color,
             1);
-        if (box.width() > 40) {
-            const std::string label = std::to_string(box.x_idx) + "," + std::to_string(box.y_idx);
-            cv::putText(overlay, label, cv::Point(box.left + 2, box.top + 12),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.32, color, 1, cv::LINE_AA);
-        }
     }
     return overlay;
 }

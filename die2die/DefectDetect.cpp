@@ -493,9 +493,11 @@ std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
     } else {
         gray.convertTo(gray8, CV_8U);
     }
-    cv::Mat mask;
-    cv::compare(gray8, params.threshold, mask, cv::CMP_GE);
-    if (params.morphSize >= 3) {
+
+    auto applyMorph = [&](cv::Mat& mask) {
+        if (params.morphSize < 3 || mask.empty()) {
+            return;
+        }
         int k = params.morphSize;
         if ((k % 2) == 0) {
             ++k;
@@ -504,82 +506,137 @@ std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
             cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(k, k));
         cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
         cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
-    }
+    };
 
-    cv::Mat labels;
-    cv::Mat stats;
-    cv::Mat centroids;
-    const int count = cv::connectedComponentsWithStats(mask, labels, stats, centroids, 8, CV_32S);
-    int id = 0;
-    for (int i = 1; i < count; ++i) {
-        DefectCandidate c;
-        c.area = stats.at<int>(i, cv::CC_STAT_AREA);
-        if (c.area < params.minArea) {
-            continue;
+    auto extractFromMask = [&](const cv::Mat& mask) {
+        std::vector<DefectCandidate> found;
+        if (mask.empty()) {
+            return found;
         }
-        c.bbox = cv::Rect(stats.at<int>(i, cv::CC_STAT_LEFT), stats.at<int>(i, cv::CC_STAT_TOP),
-                          stats.at<int>(i, cv::CC_STAT_WIDTH), stats.at<int>(i, cv::CC_STAT_HEIGHT));
-        const int shortSide = std::min(c.bbox.width, c.bbox.height);
-        const double aspect = shortSide > 0
-                                  ? static_cast<double>(std::max(c.bbox.width, c.bbox.height)) /
-                                        static_cast<double>(shortSide)
-                                  : 0.0;
-        if (aspect > params.maxAspectRatio) {
-            continue;
-        }
-        const double boxArea = static_cast<double>(c.bbox.width) * static_cast<double>(c.bbox.height);
-        if (boxArea <= 0.0 || static_cast<double>(c.area) / boxArea < params.minFill) {
-            continue;
-        }
-        if (params.maxBackground > 0.0) {
-            const int m = std::max(1, params.backgroundMargin);
-            cv::Rect ring(c.bbox.x - m, c.bbox.y - m, c.bbox.width + 2 * m, c.bbox.height + 2 * m);
-            ring &= cv::Rect(0, 0, gray8.cols, gray8.rows);
-            double bgSum = 0.0;
-            int bgN = 0;
-            for (int y = ring.y; y < ring.y + ring.height; ++y) {
-                const unsigned char* row = gray8.ptr<unsigned char>(y);
-                for (int x = ring.x; x < ring.x + ring.width; ++x) {
-                    if (c.bbox.contains(cv::Point(x, y))) {
-                        continue;
-                    }
-                    bgSum += static_cast<double>(row[x]);
-                    ++bgN;
-                }
-            }
-            if (bgN <= 0 || bgSum / static_cast<double>(bgN) > params.maxBackground) {
+        cv::Mat labels;
+        cv::Mat stats;
+        cv::Mat centroids;
+        const int count =
+            cv::connectedComponentsWithStats(mask, labels, stats, centroids, 8, CV_32S);
+        for (int i = 1; i < count; ++i) {
+            DefectCandidate c;
+            c.area = stats.at<int>(i, cv::CC_STAT_AREA);
+            if (c.area < params.minArea) {
                 continue;
             }
-        }
-        c.id = ++id;
-        c.labelId = i;
-        c.centroid = cv::Point2d(centroids.at<double>(i, 0), centroids.at<double>(i, 1));
-        c.polarity = DefectPolarity::Bright;
-        c.brightArea = c.area;
-        double sum = 0.0;
-        double peak = 0.0;
-        int n = 0;
-        const cv::Rect roi = c.bbox & cv::Rect(0, 0, gray8.cols, gray8.rows);
-        for (int y = roi.y; y < roi.y + roi.height; ++y) {
-            const int* lab = labels.ptr<int>(y);
-            const unsigned char* row = gray8.ptr<unsigned char>(y);
-            for (int x = roi.x; x < roi.x + roi.width; ++x) {
-                if (lab[x] != i) {
+            c.bbox = cv::Rect(stats.at<int>(i, cv::CC_STAT_LEFT), stats.at<int>(i, cv::CC_STAT_TOP),
+                              stats.at<int>(i, cv::CC_STAT_WIDTH), stats.at<int>(i, cv::CC_STAT_HEIGHT));
+            const int shortSide = std::min(c.bbox.width, c.bbox.height);
+            const double aspect = shortSide > 0
+                                      ? static_cast<double>(std::max(c.bbox.width, c.bbox.height)) /
+                                            static_cast<double>(shortSide)
+                                      : 0.0;
+            if (aspect > params.maxAspectRatio) {
+                continue;
+            }
+            const double boxArea =
+                static_cast<double>(c.bbox.width) * static_cast<double>(c.bbox.height);
+            if (boxArea <= 0.0 || static_cast<double>(c.area) / boxArea < params.minFill) {
+                continue;
+            }
+            if (params.maxBackground > 0.0) {
+                const int m = std::max(1, params.backgroundMargin);
+                cv::Rect ring(c.bbox.x - m, c.bbox.y - m, c.bbox.width + 2 * m,
+                              c.bbox.height + 2 * m);
+                ring &= cv::Rect(0, 0, gray8.cols, gray8.rows);
+                double bgSum = 0.0;
+                int bgN = 0;
+                for (int y = ring.y; y < ring.y + ring.height; ++y) {
+                    const unsigned char* row = gray8.ptr<unsigned char>(y);
+                    for (int x = ring.x; x < ring.x + ring.width; ++x) {
+                        if (c.bbox.contains(cv::Point(x, y))) {
+                            continue;
+                        }
+                        bgSum += static_cast<double>(row[x]);
+                        ++bgN;
+                    }
+                }
+                if (bgN <= 0 || bgSum / static_cast<double>(bgN) > params.maxBackground) {
                     continue;
                 }
-                const double v = static_cast<double>(row[x]);
-                sum += v;
-                peak = std::max(peak, v);
-                ++n;
+            }
+            c.labelId = i;
+            c.centroid = cv::Point2d(centroids.at<double>(i, 0), centroids.at<double>(i, 1));
+            c.polarity = DefectPolarity::Bright;
+            c.brightArea = c.area;
+            double sum = 0.0;
+            double peak = 0.0;
+            int n = 0;
+            const cv::Rect roi = c.bbox & cv::Rect(0, 0, gray8.cols, gray8.rows);
+            for (int y = roi.y; y < roi.y + roi.height; ++y) {
+                const int* lab = labels.ptr<int>(y);
+                const unsigned char* row = gray8.ptr<unsigned char>(y);
+                for (int x = roi.x; x < roi.x + roi.width; ++x) {
+                    if (lab[x] != i) {
+                        continue;
+                    }
+                    const double v = static_cast<double>(row[x]);
+                    sum += v;
+                    peak = std::max(peak, v);
+                    ++n;
+                }
+            }
+            if (n > 0) {
+                c.meanL2 = sum / static_cast<double>(n);
+                c.maxL2 = peak;
+                c.meanSigned = c.meanL2;
+                c.maxSigned = peak;
+            }
+            found.push_back(c);
+        }
+        return found;
+    };
+
+    auto appendUnique = [&](const std::vector<DefectCandidate>& extra) {
+        for (const auto& w : extra) {
+            bool overlap = false;
+            for (const auto& e : out) {
+                const cv::Rect hit = e.bbox & w.bbox;
+                const int need = std::max(1, static_cast<int>(0.3 * std::min(static_cast<int>(w.bbox.area()),
+                                                                             static_cast<int>(e.bbox.area()))));
+                if (hit.area() >= need) {
+                    overlap = true;
+                    break;
+                }
+            }
+            if (!overlap) {
+                out.push_back(w);
             }
         }
-        if (n > 0) {
-            c.meanL2 = sum / static_cast<double>(n);
-            c.maxL2 = peak;
-            c.meanSigned = c.meanL2;
-            c.maxSigned = peak;
+    };
+
+    cv::Mat absMask;
+    cv::compare(gray8, params.threshold, absMask, cv::CMP_GE);
+    applyMorph(absMask);
+    out = extractFromMask(absMask);
+
+    if (params.tophatSize >= 3 && params.tophatMin > 0.0) {
+        int k = params.tophatSize;
+        if ((k % 2) == 0) {
+            ++k;
         }
-        out.push_back(c);
+        const cv::Mat hatKernel =
+            cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(k, k));
+        cv::Mat hat;
+        cv::morphologyEx(gray8, hat, cv::MORPH_TOPHAT, hatKernel);
+        cv::Mat tmask;
+        cv::compare(hat, params.tophatMin, tmask, cv::CMP_GE);
+        const double floor = params.tophatFloor > 0.0 ? params.tophatFloor : 50.0;
+        cv::Mat brightEnough;
+        cv::compare(gray8, floor, brightEnough, cv::CMP_GE);
+        cv::bitwise_and(tmask, brightEnough, tmask);
+        applyMorph(tmask);
+        appendUnique(extractFromMask(tmask));
+    }
+
+    int id = 0;
+    for (auto& c : out) {
+        c.id = ++id;
     }
     return out;
 }
@@ -681,17 +738,14 @@ cv::Mat drawDefectOverlay(const cv::Mat& base, const std::vector<DefectCandidate
         }
         vis &= bounds;
         if (vis.area() > 0) {
-            cv::rectangle(overlay, vis, color, 2);
+            cv::rectangle(overlay, vis, color, 1);
         } else {
-            cv::rectangle(overlay, c.bbox, color, 2);
+            cv::rectangle(overlay, c.bbox, color, 1);
         }
         const cv::Point center(cvRound(c.centroid.x), cvRound(c.centroid.y));
         if (bounds.contains(center)) {
-            cv::circle(overlay, center, 4, color, cv::FILLED, cv::LINE_AA);
+            cv::circle(overlay, center, 1, color, cv::FILLED, cv::LINE_AA);
         }
-        const cv::Point origin(c.bbox.x, std::max(0, c.bbox.y - 4));
-        const std::string label = std::to_string(c.id) + " " + defectPolarityName(c.polarity);
-        cv::putText(overlay, label, origin, cv::FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv::LINE_AA);
     }
     return overlay;
 }

@@ -53,13 +53,16 @@ struct DefectFilterParams {
 
 struct LargeWhiteParams {
     bool enable = false;          // 在本颗 die 上按亮度抓大块白区（不依赖邻居）
-    double threshold = 230.0;     // 灰度下限
+    double threshold = 230.0;     // 灰度下限（块状 / 较亮白点）
     int minArea = 4000;           // 排除总线小白块
     double minFill = 0.15;        // bbox 填充率，排除散点连成的假大块
     double maxAspectRatio = 3.0;  // 排除细长亮条
     int morphSize = 5;           // 开+闭核宽；<3 跳过。小白点应关掉，否则 5x5 会吃掉
     double maxBackground = 0.0; // >0：bbox 外圈均值须 <= 此值，只保留暗底上的白点
     int backgroundMargin = 12;   // 背景外圈宽度
+    int tophatSize = 0;          // 白帽核宽；<3 关闭。用来抓暗底上的浅小白点
+    double tophatMin = 0.0;      // 白帽响应下限；>0 时另走一条浅点掩膜
+    double tophatFloor = 0.0;    // 浅点还须灰度 >= 此值；<=0 则用 50
 };
 
 struct DefectDetectParams {

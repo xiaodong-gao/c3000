@@ -40,6 +40,92 @@ bool is_image_file(const fs::path& path) {
     return false;
 }
 
+std::string trim_copy(std::string s) {
+    while (!s.empty() && (s.back() == '\r' || s.back() == '\n' || s.back() == ' ' || s.back() == '\t')) {
+        s.pop_back();
+    }
+    size_t i = 0;
+    while (i < s.size() && (s[i] == ' ' || s[i] == '\t')) {
+        ++i;
+    }
+    return s.substr(i);
+}
+
+bool d2d_enabled(const Options& opt) {
+    return opt.defect.filter.keepBright || opt.defect.filter.keepDark ||
+           opt.defect.filter.keepMixed || opt.defect.filter.keepUnknown;
+}
+
+void merge_large_white(const cv::Mat& data, const Options& opt, PipelineOutput& pipe) {
+    if (!opt.defect.largeWhite.enable || data.empty()) {
+        return;
+    }
+    std::vector<DefectCandidate> crop_cands;
+    crop_cands.reserve(pipe.candidates.size() + 4);
+    for (DefectCandidate c : pipe.candidates) {
+        c.bbox.x += pipe.commonRoi.x;
+        c.bbox.y += pipe.commonRoi.y;
+        c.centroid.x += pipe.commonRoi.x;
+        c.centroid.y += pipe.commonRoi.y;
+        crop_cands.push_back(c);
+    }
+    const std::vector<DefectCandidate> whites =
+        extractLargeWhiteRegions(data, opt.defect.largeWhite);
+    for (const auto& w : whites) {
+        bool overlap = false;
+        for (const auto& e : crop_cands) {
+            if (e.polarity != DefectPolarity::Bright) {
+                continue;
+            }
+            const cv::Rect hit = e.bbox & w.bbox;
+            const int need = std::max(1, static_cast<int>(0.3 * w.bbox.area()));
+            if (hit.area() >= need) {
+                overlap = true;
+                break;
+            }
+        }
+        if (!overlap) {
+            crop_cands.push_back(w);
+        }
+    }
+    int rec_id = 0;
+    for (auto& c : crop_cands) {
+        c.id = ++rec_id;
+    }
+    pipe.candidates.swap(crop_cands);
+    pipe.defectOverlay = drawDefectOverlay(data, pipe.candidates);
+}
+
+std::set<std::string> load_truth_names(const fs::path& path) {
+    std::set<std::string> truth;
+    std::error_code ec;
+    if (fs::is_regular_file(path, ec) && to_lower(path.extension().string()) == ".txt") {
+        std::ifstream in(path);
+        if (!in) {
+            throw std::runtime_error("无法读取正样本列表: " + path.string());
+        }
+        std::string line;
+        while (std::getline(in, line)) {
+            line = trim_copy(line);
+            if (line.empty()) {
+                continue;
+            }
+            truth.insert(fs::path(line).filename().string());
+        }
+        return truth;
+    }
+    if (!fs::is_directory(path, ec)) {
+        throw std::runtime_error("正样本目录不存在: " + path.string());
+    }
+    for (const auto& entry : fs::directory_iterator(path, ec)) {
+        if (!entry.is_regular_file(ec) || !is_image_file(entry.path())) {
+            continue;
+        }
+        truth.insert(entry.path().filename().string());
+    }
+    return truth;
+}
+
 bool parse_die_xy(const std::string& name, int& x, int& y) {
     const auto p = name.find("die_x");
     if (p == std::string::npos) {
@@ -364,7 +450,9 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
     if (cut.full.empty()) {
         throw std::runtime_error("切割结果中没有原始晶圆图");
     }
-    if (templates.single ? templates.single_img.empty() : templates.by_xy.empty()) {
+    const bool run_d2d = opt.defect.filter.keepBright || opt.defect.filter.keepDark ||
+                         opt.defect.filter.keepMixed || opt.defect.filter.keepUnknown;
+    if (run_d2d && (templates.single ? templates.single_img.empty() : templates.by_xy.empty())) {
         throw std::runtime_error("外部模板为空");
     }
 
@@ -421,8 +509,7 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
     cv::Mat overlay = to_bgr(cut.full);
     const int preview_px = opt.overlay_preview_px > 0 ? opt.overlay_preview_px : kDetectTarget;
     const double scale = std::max(overlay.cols, overlay.rows) / static_cast<double>(preview_px);
-    const int thickness = std::max(2, cvRound(std::max(1.0, scale)));
-    const double font = std::max(0.35, 0.35 * std::max(1.0, scale));
+    const int thickness = std::max(1, cvRound(scale));
 
     InspectResult result;
     result.csv_path = opt.out / "defects.csv";
@@ -450,9 +537,6 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
             ++result.skipped_die;
             continue;
         }
-
-        const bool run_d2d = opt.defect.filter.keepBright || opt.defect.filter.keepDark ||
-                              opt.defect.filter.keepMixed || opt.defect.filter.keepUnknown;
 
         PipelineOutput pipe;
         if (!run_d2d) {
@@ -556,8 +640,14 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
 
         const int origin_x = crop.x;
         const int origin_y = crop.y;
-        const int min_vis = std::max(24, thickness * 10);
-        const int mark_r = std::max(8, thickness * 4);
+        int min_vis = std::max(crop.width, crop.height) / 4;
+        if (min_vis < 6) {
+            min_vis = 6;
+        }
+        if (min_vis > 24) {
+            min_vis = 24;
+        }
+        const int mark_r = 1;
         const cv::Rect wafer_bounds(0, 0, overlay.cols, overlay.rows);
 
         if (!crop_cands.empty()) {
@@ -606,18 +696,11 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
                 vis.height = min_vis;
                 vis &= wafer_bounds;
             }
-            cv::rectangle(overlay, vis.area() > 0 ? vis : d.bbox, color, std::max(2, thickness));
+            cv::rectangle(overlay, vis.area() > 0 ? vis : d.bbox, color, 1);
             const cv::Point center(cvRound(d.centroid.x), cvRound(d.centroid.y));
             if (wafer_bounds.contains(center)) {
                 cv::circle(overlay, center, mark_r, color, cv::FILLED, cv::LINE_AA);
-                cv::circle(overlay, center, mark_r + std::max(2, thickness), color, std::max(2, thickness),
-                           cv::LINE_AA);
             }
-            cv::putText(overlay,
-                        std::to_string(box.x_idx) + "," + std::to_string(box.y_idx) + "#" +
-                            std::to_string(c.id) + " " + defectPolarityName(c.polarity),
-                        cv::Point(d.bbox.x, std::max(12, d.bbox.y - 4)), cv::FONT_HERSHEY_SIMPLEX,
-                        font, color, std::max(1, thickness / 2), cv::LINE_AA);
         }
 
         if (!pipe.blobMask.empty()) {
@@ -669,7 +752,8 @@ PatchEvalResult eval_patches(const Options& opt, const TemplateCache& templates)
     if (opt.eval_truth_dir.empty()) {
         throw std::runtime_error("eval_truth_dir 为空");
     }
-    if (templates.single ? templates.single_img.empty() : templates.by_xy.empty()) {
+    const bool run_d2d = d2d_enabled(opt);
+    if (run_d2d && (templates.single ? templates.single_img.empty() : templates.by_xy.empty())) {
         throw std::runtime_error("外部模板为空");
     }
 
@@ -677,27 +761,27 @@ PatchEvalResult eval_patches(const Options& opt, const TemplateCache& templates)
     if (!fs::is_directory(opt.eval_patch_dir, ec)) {
         throw std::runtime_error("待测 patch 目录不存在: " + opt.eval_patch_dir.string());
     }
-    if (!fs::is_directory(opt.eval_truth_dir, ec)) {
-        throw std::runtime_error("正样本目录不存在: " + opt.eval_truth_dir.string());
-    }
 
-    std::set<std::string> truth;
-    for (const auto& entry : fs::directory_iterator(opt.eval_truth_dir, ec)) {
-        if (!entry.is_regular_file(ec) || !is_image_file(entry.path())) {
-            continue;
-        }
-        truth.insert(entry.path().filename().string());
-    }
+    const std::set<std::string> truth = load_truth_names(opt.eval_truth_dir);
     if (truth.empty()) {
-        throw std::runtime_error("正样本目录中没有图像: " + opt.eval_truth_dir.string());
+        throw std::runtime_error("正样本列表为空: " + opt.eval_truth_dir.string());
     }
 
     std::vector<fs::path> patches;
-    for (const auto& entry : fs::directory_iterator(opt.eval_patch_dir, ec)) {
-        if (!entry.is_regular_file(ec) || !is_image_file(entry.path())) {
-            continue;
+    const bool truth_is_list =
+        fs::is_regular_file(opt.eval_truth_dir, ec) &&
+        to_lower(opt.eval_truth_dir.extension().string()) == ".txt";
+    if (truth_is_list) {
+        for (const auto& name : truth) {
+            patches.push_back(opt.eval_patch_dir / name);
         }
-        patches.push_back(entry.path());
+    } else {
+        for (const auto& entry : fs::directory_iterator(opt.eval_patch_dir, ec)) {
+            if (!entry.is_regular_file(ec) || !is_image_file(entry.path())) {
+                continue;
+            }
+            patches.push_back(entry.path());
+        }
     }
     std::sort(patches.begin(), patches.end());
     if (patches.empty()) {
@@ -798,6 +882,9 @@ PatchEvalResult eval_patches(const Options& opt, const TemplateCache& templates)
         PipelineOutput pipe;
         if (data.empty()) {
             error = "无法读取 " + path.string();
+        } else if (!run_d2d) {
+            pipe.ok = true;
+            merge_large_white(data, opt, pipe);
         } else {
             const int want = opt.template_neighbor ? std::max(1, opt.template_neighbor_min) : 1;
             std::vector<cv::Mat> refs =
@@ -832,6 +919,9 @@ PatchEvalResult eval_patches(const Options& opt, const TemplateCache& templates)
                            neighbor_hits < opt.template_neighbor_min) {
                     pipe.candidates.clear();
                 }
+            }
+            if (error.empty()) {
+                merge_large_white(data, opt, pipe);
             }
         }
 

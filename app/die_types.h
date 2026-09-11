@@ -77,7 +77,8 @@ struct Options {
     HistogramMethod histogram_method = HistogramMethod::Cpu;
     NormalizeMethod normalize_method = NormalizeMethod::Cpu;
 
-    // 非空则只评测已切割 patch，不切晶圆。eval_truth_dir 内文件名视为有缺陷。
+    // 非空则只评测已切割 patch，不切晶圆。
+    // eval_truth_dir：正样本图像目录，或 image_names.txt（每行一个文件名视为有缺陷）。
     fs::path eval_patch_dir;
     fs::path eval_truth_dir;
 

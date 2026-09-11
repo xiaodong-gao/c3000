@@ -63,7 +63,7 @@ TemplateCache templates_from_cut(const CutResult& cut, bool keep_skipped);
 // 用外部模板对每个 die 做完整 D2D 检出，把缺陷画回原始晶圆大图并保存。
 InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const TemplateCache& templates);
 
-// 对已切割 patch 做 D2D，按 eval_truth_dir 文件名统计 TP/FP/FN。
+// 对已切割 patch 做检出。eval_truth_dir 可以是正样本目录或 txt 名单。
 PatchEvalResult eval_patches(const Options& opt, const TemplateCache& templates);
 
 }  // namespace cutdie

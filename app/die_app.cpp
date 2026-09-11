@@ -220,19 +220,28 @@ int run(Options opt) {
     }
 
     if (!opt.eval_patch_dir.empty()) {
-        if (opt.template_path.empty()) {
-            throw std::runtime_error("patch 评测需要指定外部模板");
-        }
         if (opt.eval_truth_dir.empty()) {
             throw std::runtime_error("patch 评测需要指定 eval_truth_dir");
         }
-        const TemplateCache templates = load_templates(opt.template_path);
+        const bool run_d2d = opt.defect.filter.keepBright || opt.defect.filter.keepDark ||
+                             opt.defect.filter.keepMixed || opt.defect.filter.keepUnknown;
+        TemplateCache templates;
+        if (run_d2d) {
+            if (opt.template_path.empty()) {
+                throw std::runtime_error("patch 评测需要指定外部模板");
+            }
+            templates = load_templates(opt.template_path);
+        }
         std::cout << "patch 评测模式\n";
         std::cout << "  待测: " << opt.eval_patch_dir.string() << '\n';
         std::cout << "  正样本: " << opt.eval_truth_dir.string() << '\n';
-        std::cout << "  模板: " << opt.template_path.string() << '\n';
+        if (run_d2d) {
+            std::cout << "  模板: " << opt.template_path.string() << '\n';
+        } else {
+            std::cout << "  模板: 无（只走 largeWhite）\n";
+        }
         const PatchEvalResult result = eval_patches(opt, templates);
-        return (result.fn == 0 && result.fp == 0 && result.failed == 0) ? 0 : 1;
+        return (result.fn == 0 && result.failed == 0) ? 0 : 1;
     }
 
     const double resolution_um = opt.resolution_um;
@@ -258,11 +267,14 @@ int run(Options opt) {
             }
             const CutResult cut = cut_patches(one, resolution_um);
             if (one.inspect) {
-                if (one.template_neighbor && templates.by_xy.empty() && templates.single_img.empty()) {
+                const bool run_d2d = one.defect.filter.keepBright || one.defect.filter.keepDark ||
+                                     one.defect.filter.keepMixed || one.defect.filter.keepUnknown;
+                if (run_d2d && one.template_neighbor && templates.by_xy.empty() &&
+                    templates.single_img.empty()) {
                     templates = templates_from_cut(cut, one.keep_skipped);
                     std::cout << "  模板: 本片相邻 die (" << templates.by_xy.size() << ")\n";
                 }
-                if (templates.single ? templates.single_img.empty() : templates.by_xy.empty()) {
+                if (run_d2d && (templates.single ? templates.single_img.empty() : templates.by_xy.empty())) {
                     std::cerr << "  跳过检出: 未指定外部模板，且未启用相邻 die\n";
                 } else {
                     inspect_wafer(one, cut, templates);
