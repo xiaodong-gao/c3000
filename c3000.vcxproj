@@ -22,7 +22,7 @@
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{91a7a687-a40c-438a-ba17-3c31e313b458}</ProjectGuid>
-    <RootNamespace>cutdiepg</RootNamespace>
+    <RootNamespace>c3000</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -73,6 +73,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <OpenCVRoot>C:\development\opencv-4.14.0-windows\build</OpenCVRoot>
+    <IncludePathList>$(ProjectDir);$(ProjectDir)app;$(ProjectDir)die2die;$(ProjectDir)ams;$(ProjectDir)utils</IncludePathList>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -82,7 +83,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IncludePathList);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -99,7 +100,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IncludePathList);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -114,7 +115,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)inspect;$(CudaToolkitDir)\include;$(OpenCVRoot)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IncludePathList);$(CudaToolkitDir)\include;$(OpenCVRoot)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -127,7 +128,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalOptions>-allow-unsupported-compiler %(AdditionalOptions)</AdditionalOptions>
       <Defines>_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH;%(Defines)</Defines>
-      <AdditionalIncludeDirectories>$(ProjectDir)inspect;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IncludePathList);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
     </CudaCompile>
     <PostBuildEvent>
@@ -144,7 +145,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)inspect;$(CudaToolkitDir)\include;$(OpenCVRoot)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IncludePathList);$(CudaToolkitDir)\include;$(OpenCVRoot)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -157,7 +158,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <AdditionalOptions>-allow-unsupported-compiler -O3 %(AdditionalOptions)</AdditionalOptions>
       <Defines>_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH;%(Defines)</Defines>
-      <AdditionalIncludeDirectories>$(ProjectDir)inspect;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IncludePathList);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
     </CudaCompile>
     <PostBuildEvent>
@@ -165,74 +166,127 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\die_app.cpp" />
-    <ClCompile Include="src\die_cut.cpp" />
-    <ClCompile Include="src\die_inspect.cpp">
+    <Filter Include="app">
+      <UniqueIdentifier>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ams">
+      <UniqueIdentifier>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="die2die">
+      <UniqueIdentifier>{C3D4E5F6-A7B8-9012-CDEF-123456789012}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{D4E5F6A7-B8C9-0123-DEF0-234567890123}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="app\die_app.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="app\die_cut.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="app\die_inspect.cpp">
+      <Filter>app</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="src\die_map.cpp" />
-    <ClCompile Include="src\die_util.cpp" />
-    <ClCompile Include="inspect\DefectDetect.cpp">
+    <ClCompile Include="app\die_map.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="app\die_util.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="die2die\DefectDetect.cpp">
+      <Filter>die2die</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="inspect\EccAlign.cpp">
+    <ClCompile Include="die2die\Pipeline.cpp">
+      <Filter>die2die</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="inspect\HistogramThreshold.cpp">
+    <ClCompile Include="ams\EccAlign.cpp">
+      <Filter>ams</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="inspect\IntensityNormalize.cpp">
+    <ClCompile Include="ams\PhaseCorrelate.cpp">
+      <Filter>ams</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="inspect\PhaseCorrelate.cpp">
+    <ClCompile Include="utils\HistogramThreshold.cpp">
+      <Filter>utils</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="inspect\Pipeline.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="inspect\Mssim.cpp">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="inspect\SelfCheck.cpp">
+    <ClCompile Include="utils\IntensityNormalize.cpp">
+      <Filter>utils</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\die_app.h" />
-    <ClInclude Include="include\die_cut.h" />
-    <ClInclude Include="include\die_inspect.h" />
-    <ClInclude Include="include\die_map.h" />
-    <ClInclude Include="include\die_types.h" />
-    <ClInclude Include="include\die_util.h" />
-    <ClInclude Include="inspect\DefectDetect.hpp" />
-    <ClInclude Include="inspect\EccAlign.hpp" />
-    <ClInclude Include="inspect\EccAlign.cuh" />
-    <ClInclude Include="inspect\HistogramThreshold.h" />
-    <ClInclude Include="inspect\HistogramThreshold.cuh" />
-    <ClInclude Include="inspect\IntensityNormalize.h" />
-    <ClInclude Include="inspect\IntensityNormalize.cuh" />
-    <ClInclude Include="inspect\PhaseCorrelate.hpp" />
-    <ClInclude Include="inspect\PhaseCorrelate.cuh" />
-    <ClInclude Include="inspect\Pipeline.hpp" />
-    <ClInclude Include="inspect\Mssim.hpp" />
-    <ClInclude Include="inspect\Mssim.cuh" />
-    <ClInclude Include="inspect\SelfCheck.hpp" />
+    <ClInclude Include="app\die_app.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\die_cut.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\die_inspect.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\die_map.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\die_types.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\die_util.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="die2die\DefectDetect.hpp">
+      <Filter>die2die</Filter>
+    </ClInclude>
+    <ClInclude Include="die2die\Pipeline.hpp">
+      <Filter>die2die</Filter>
+    </ClInclude>
+    <ClInclude Include="ams\EccAlign.hpp">
+      <Filter>ams</Filter>
+    </ClInclude>
+    <ClInclude Include="ams\EccAlign.cuh">
+      <Filter>ams</Filter>
+    </ClInclude>
+    <ClInclude Include="ams\PhaseCorrelate.hpp">
+      <Filter>ams</Filter>
+    </ClInclude>
+    <ClInclude Include="ams\PhaseCorrelate.cuh">
+      <Filter>ams</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\HistogramThreshold.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\HistogramThreshold.cuh">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\IntensityNormalize.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\IntensityNormalize.cuh">
+      <Filter>utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="inspect\EccAlign.cu">
+    <CudaCompile Include="ams\EccAlign.cu">
+      <Filter>ams</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </CudaCompile>
-    <CudaCompile Include="inspect\HistogramThreshold.cu">
+    <CudaCompile Include="ams\PhaseCorrelate.cu">
+      <Filter>ams</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </CudaCompile>
-    <CudaCompile Include="inspect\IntensityNormalize.cu">
+    <CudaCompile Include="utils\HistogramThreshold.cu">
+      <Filter>utils</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </CudaCompile>
-    <CudaCompile Include="inspect\PhaseCorrelate.cu">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </CudaCompile>
-    <CudaCompile Include="inspect\Mssim.cu">
+    <CudaCompile Include="utils\IntensityNormalize.cu">
+      <Filter>utils</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </CudaCompile>
   </ItemGroup>

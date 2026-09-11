@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="app">
+      <UniqueIdentifier>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ams">
+      <UniqueIdentifier>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="die2die">
+      <UniqueIdentifier>{C3D4E5F6-A7B8-9012-CDEF-123456789012}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{D4E5F6A7-B8C9-0123-DEF0-234567890123}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="app\die_app.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="app\die_cut.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="app\die_inspect.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="app\die_map.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="app\die_util.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="die2die\DefectDetect.cpp">
+      <Filter>die2die</Filter>
+    </ClCompile>
+    <ClCompile Include="die2die\Pipeline.cpp">
+      <Filter>die2die</Filter>
+    </ClCompile>
+    <ClCompile Include="ams\EccAlign.cpp">
+      <Filter>ams</Filter>
+    </ClCompile>
+    <ClCompile Include="ams\PhaseCorrelate.cpp">
+      <Filter>ams</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\HistogramThreshold.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\IntensityNormalize.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="app\die_app.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\die_cut.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\die_inspect.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\die_map.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\die_types.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\die_util.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="die2die\DefectDetect.hpp">
+      <Filter>die2die</Filter>
+    </ClInclude>
+    <ClInclude Include="die2die\Pipeline.hpp">
+      <Filter>die2die</Filter>
+    </ClInclude>
+    <ClInclude Include="ams\EccAlign.hpp">
+      <Filter>ams</Filter>
+    </ClInclude>
+    <ClInclude Include="ams\EccAlign.cuh">
+      <Filter>ams</Filter>
+    </ClInclude>
+    <ClInclude Include="ams\PhaseCorrelate.hpp">
+      <Filter>ams</Filter>
+    </ClInclude>
+    <ClInclude Include="ams\PhaseCorrelate.cuh">
+      <Filter>ams</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\HistogramThreshold.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\HistogramThreshold.cuh">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\IntensityNormalize.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\IntensityNormalize.cuh">
+      <Filter>utils</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="ams\EccAlign.cu">
+      <Filter>ams</Filter>
+    </CudaCompile>
+    <CudaCompile Include="ams\PhaseCorrelate.cu">
+      <Filter>ams</Filter>
+    </CudaCompile>
+    <CudaCompile Include="utils\HistogramThreshold.cu">
+      <Filter>utils</Filter>
+    </CudaCompile>
+    <CudaCompile Include="utils\IntensityNormalize.cu">
+      <Filter>utils</Filter>
+    </CudaCompile>
+  </ItemGroup>
+</Project>
