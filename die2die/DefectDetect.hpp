@@ -70,6 +70,11 @@ struct LargeWhiteParams {
     int tophatStreetBand = 0;    // 白帽掩膜挖掉中心划片槽带；0 关闭
     int tophatBorderMargin = 0;  // 白帽丢掉贴边块；0 关闭
     double tophatMinPeak = 0.0;  // 白帽块内灰度峰值下限；0 关闭
+    // 圆内孤立小白点（1x1 等）：暗场会被高斯背景吃掉；圆掩膜还会把亮边截成假点。
+    // 在未抠圆的原图上找，再与内缩圆相交。isolatedMaxArea<=0 关闭。
+    int isolatedMaxArea = 0;
+    double isolatedThreshold = 0.0;
+    int isolatedInnerMargin = 16;  // 只用于圆掩膜通路丢掉贴边假小点；孤立通路不内缩
 };
 
 struct DarkRegionParams {

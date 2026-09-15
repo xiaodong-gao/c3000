@@ -3,6 +3,8 @@
 #include "DefectDetect.hpp"
 #include "EccAlign.hpp"
 #include "HistogramThreshold.h"
+#include "BrightDarkDetector.h"
+#include "IntensityNormalizer.h"
 
 #include <filesystem>
 #include <set>
@@ -33,7 +35,17 @@ struct DieMap {
     double trim_cx = 0;
     double trim_cy = 0;
     double trim_size = 0;
+    int gray_min = 0;
+    int gray_max = 255;
+    bool patterned = true;
     std::set<std::pair<int, int>> skipped;
+};
+
+struct WaferCircle {
+    double cx = 0;
+    double cy = 0;
+    double radius = 0;
+    int lut = 0;
 };
 
 struct DieBox {
@@ -87,6 +99,11 @@ struct Options {
     EccAlignParams ecc;
     DefectDetectParams defect;
     int overlay_preview_px = kDetectTarget;
+
+    // 无图形晶圆：只切对齐 XML 中的圆形 ROI，整圆直接走 singledie。不切 die patch。
+    bool singledie = true;
+    singledie::IntensityNormalizeParams singledie_normalize;
+    singledie::DetectionParams singledie_detect;
 };
 
 struct Job {

@@ -1,5 +1,5 @@
-// 从晶圆 PNG 切割 die，再用外部模板做完整 D2D 检出。
-// 缺陷画在原始输入大图上，保存为 defect_overlay.png。
+// 读取对齐 XML 的圆形 ROI，整圆直接送入 SingleDie 检出。不切 die patch。
+// 缺陷画在圆形 ROI 上，保存为 defect_overlay.png。
 // 全部配方参数只在本文件的 main 里设置，不使用命令行参数。
 
 #include "die_app.h"
@@ -24,22 +24,47 @@ int main() {
         cutdie::Options opt;
 
         // ========== 输入 / 输出 ==========
-        opt.dir = "C:/Users/aspiring135/Desktop/datasets/46um-gray";
-        opt.image = "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046.png";
-        opt.xml = "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046.xml";
+        opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-no-partern-wafer";
+        opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-no-partern-wafer/50um-nopatern.png";
+        opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-no-partern-wafer/50um-nopatern.xml";
         opt.out.clear();                   // 空则写到 <图像目录>/<图像名>/
-        opt.patch_out.clear();             // 空则写到 <out>/patches
-        opt.resolution_um = 46.0;          // 每个像素对应多少 um
+        opt.patch_out.clear();             // SingleDie 模式不切 patch，此路径无效
+        opt.resolution_um = 50.0;          // 每个像素对应多少 um
         opt.keep_skipped = false;          // 是否保存 XML 中标记跳过的 die
         opt.recursive = false;             // 是否递归扫描输入目录
-        opt.overlay_preview_px = 8000;     // die 预览图最长边；缺陷原图仍按原始分辨率保存
+        opt.overlay_preview_px = 8000;     // 圆形 ROI 预览图最长边
 
-        // ========== 模板 / 检出开关 ==========
-        // 空 + template_neighbor：切割后用本片相邻 die 做 D2D
+        // ========== 检出开关 ==========
         opt.template_path.clear();
-        opt.template_neighbor = true;
-        opt.template_neighbor_min = 2;      // 两个邻居都检出才算缺陷
+        opt.template_neighbor = false;
+        opt.template_neighbor_min = 1;
         opt.inspect = true;
+        opt.singledie = true;              // 只切圆形 ROI，直接进 SingleDie
+
+        // ========== SingleDie（读对齐 XML，只截圆形 ROI）==========
+        // 目标：把圆内所有亮/暗缺陷都检出来（含 1px、划痕、大块）。
+        // 背景核要明显大于缺陷，避免大缺陷被吃进背景。
+        opt.singledie_normalize.background.method = singledie::BackgroundMethod::Gaussian;
+        opt.singledie_normalize.background.kernelSize = 201;
+        opt.singledie_normalize.background.sigma = 0.0;
+        opt.singledie_normalize.method = singledie::IntensityMethod::Divide;
+        opt.singledie_normalize.minBackground = 1e-6f;
+        opt.singledie_normalize.robustPercentile = true;
+
+        opt.singledie_detect.enableBright = true;
+        opt.singledie_detect.enableDark = true;
+        opt.singledie_detect.brightThreshold = 0.025f;
+        opt.singledie_detect.darkThreshold = 0.025f;
+        opt.singledie_detect.morphologyKernel = 3;
+        opt.singledie_detect.openIterations = 0;     // 开运算会吃掉 1–4px 小缺陷
+        opt.singledie_detect.closeIterations = 1;    // 只补断裂，不删点
+        opt.singledie_detect.minArea = 1;            // XML DSize 从 0 um 起，50um/px 对应 1px
+        opt.singledie_detect.maxArea = 10000000;     // 不限制大缺陷
+        opt.singledie_detect.borderMargin = 0;       // 圆边缺陷不要当贴边丢掉
+        opt.singledie_detect.enableBlob = false;
+        opt.singledie_detect.keepResponseMaps = false;
+        opt.singledie_detect.maxAspectRatio = 0.0f;  // 0 关闭，保留划痕/细长缺陷
+        opt.singledie_detect.minFillRatio = 0.0f;
 
         // ========== patch 评测（非空则不切晶圆） ==========
         opt.eval_patch_dir.clear();
@@ -109,13 +134,13 @@ int main() {
         opt.defect.filter.minMeanL2 = 14.0;
         opt.defect.filter.minAbsMeanSigned = 12.0;
 
-        // ========== 白色方框：近 255 的大块近方形白区；关掉白帽，网格小亮点会大面积过检 ==========
+        // ========== 白点 / 大白块（暗场按绝对灰度，1px 到整块白区都收）==========
         opt.defect.largeWhite.enable = true;
-        opt.defect.largeWhite.threshold = 230.0;
-        opt.defect.largeWhite.minArea = 7000;
-        opt.defect.largeWhite.minFill = 0.35;
-        opt.defect.largeWhite.maxAspectRatio = 1.6;
-        opt.defect.largeWhite.morphSize = 0;
+        opt.defect.largeWhite.threshold = 120.0;   // 暗场小白点；晶圆亮边约 60，120 以上才收
+        opt.defect.largeWhite.minArea = 1;         // 含漏检的 1x1 白点
+        opt.defect.largeWhite.minFill = 0.0;       // 1x1 不卡填充率
+        opt.defect.largeWhite.maxAspectRatio = 2.5;
+        opt.defect.largeWhite.morphSize = 0;       // 开运算会吃掉 1px
         opt.defect.largeWhite.maxBackground = 0.0;
         opt.defect.largeWhite.backgroundMargin = 4;
         opt.defect.largeWhite.tophatSize = 0;
@@ -128,6 +153,9 @@ int main() {
         opt.defect.largeWhite.tophatStreetBand = 0;
         opt.defect.largeWhite.tophatBorderMargin = 0;
         opt.defect.largeWhite.tophatMinPeak = 0.0;
+        opt.defect.largeWhite.isolatedMaxArea = 16;      // 底部贴边小白点常是 3x3 簇
+        opt.defect.largeWhite.isolatedThreshold = 80.0;  // 过低会和亮边连成大块；80 保住孤立白点
+        opt.defect.largeWhite.isolatedInnerMargin = 16;  // 只滤圆掩膜造成的假 1x1，孤立通路不内缩
 
         // ========== 本颗暗粒子（只收对比够、比较圆的黑点）==========
         opt.defect.darkRegion.enable = true;

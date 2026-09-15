@@ -8,6 +8,10 @@ namespace cutdie {
 
 DieMap parse_die_map(const fs::path& xml_path);
 
+// 按对齐配置得到原图像素坐标系下的物理晶圆圆（半径 = WaferDiameter/2）。
+// EdgeOffset / TrimSize 不缩小该圆；Trim CenterX/Y 只平移圆心。
+WaferCircle make_wafer_circle(const DieMap& xml, int img_w, int img_h, double resolution_um, int lut);
+
 double infer_resolution_um(const fs::path& path, double fallback = 10.0);
 
 int detect_lut_width(const cv::Mat& gray);
