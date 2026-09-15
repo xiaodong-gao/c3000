@@ -6,7 +6,7 @@ namespace cutdie {
 
 std::vector<Job> collect_jobs(const Options& opt);
 
-// 配对文件，按 XML 切割 patch，再用外部模板做完整检出。失败返回非 0。
+// 按 Options.mode 调度：DieToDie 切 patch 做相邻比较；SingleDie 切圆形 ROI 做本片检出。
 int run(Options opt);
 
 }  // namespace cutdie

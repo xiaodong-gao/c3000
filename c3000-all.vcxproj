@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{91a7a687-a40c-438a-ba17-3c31e313b458}</ProjectGuid>
-    <RootNamespace>c3000</RootNamespace>
+    <ProjectGuid>{B8C4F102-5D29-4A7E-8F63-2D9E5B7C3000}</ProjectGuid>
+    <RootNamespace>c3000-all</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -73,7 +73,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <OpenCVRoot>C:\development\opencv-4.14.0-windows\build</OpenCVRoot>
-    <IncludePathList>$(ProjectDir);$(ProjectDir)app;$(ProjectDir)die2die;$(ProjectDir)ams;$(ProjectDir)utils</IncludePathList>
+    <IncludePathList>$(ProjectDir);$(ProjectDir)app;$(ProjectDir)die2die;$(ProjectDir)ams;$(ProjectDir)utils;$(ProjectDir)singledie</IncludePathList>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -178,6 +178,9 @@
     <Filter Include="utils">
       <UniqueIdentifier>{D4E5F6A7-B8C9-0123-DEF0-234567890123}</UniqueIdentifier>
     </Filter>
+    <Filter Include="singledie">
+      <UniqueIdentifier>{E5F6A7B8-C9D0-1234-EF01-345678901234}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -219,6 +222,22 @@
     </ClCompile>
     <ClCompile Include="utils\IntensityNormalize.cpp">
       <Filter>utils</Filter>
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="singledie\BackgroundEstimator.cpp">
+      <Filter>singledie</Filter>
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="singledie\IntensityNormalizer.cpp">
+      <Filter>singledie</Filter>
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="singledie\BrightDarkDetector.cpp">
+      <Filter>singledie</Filter>
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="singledie\SingleDiePipeline.cpp">
+      <Filter>singledie</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
   </ItemGroup>
@@ -270,6 +289,18 @@
     </ClInclude>
     <ClInclude Include="utils\IntensityNormalize.cuh">
       <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="singledie\BackgroundEstimator.h">
+      <Filter>singledie</Filter>
+    </ClInclude>
+    <ClInclude Include="singledie\IntensityNormalizer.h">
+      <Filter>singledie</Filter>
+    </ClInclude>
+    <ClInclude Include="singledie\BrightDarkDetector.h">
+      <Filter>singledie</Filter>
+    </ClInclude>
+    <ClInclude Include="singledie\SingleDiePipeline.h">
+      <Filter>singledie</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

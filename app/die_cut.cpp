@@ -138,19 +138,12 @@ CutResult cut_patches(const Options& opt, double resolution_um) {
     const int img_h = full.rows;
     const int img_w = full.cols;
 
-    const double px_per_mm = 1000.0 / resolution_um;
-
     double scale = 1.0;
     const cv::Mat detect = make_detect_image(full, scale, opt.overlay_preview_px);
     const int lut = detect_lut_width(full);
     const int wafer_w = img_w - lut;
     const auto boxes = generate_dies(xml, wafer_w, img_h, resolution_um, lut);
-
-    const double wafer_radius_mm =
-        (xml.wafer_diameter - xml.trim_size * 2.0 - xml.edge_offset * 2.0) / 2.0;
-    const double cx = lut + wafer_w / 2.0 + xml.trim_cx * px_per_mm;
-    const double cy = img_h / 2.0 - xml.trim_cy * px_per_mm;
-    const double radius = wafer_radius_mm * px_per_mm;
+    const WaferCircle circle = make_wafer_circle(xml, img_w, img_h, resolution_um, lut);
 
     CutResult result;
     result.patch_dir = opt.patch_out;
@@ -162,7 +155,7 @@ CutResult cut_patches(const Options& opt, double resolution_um) {
 
     const double inv = 1.0 / scale;
     const auto overlay = draw_overlay(
-        detect, scale_boxes(boxes, inv), cx * inv, cy * inv, radius * inv);
+        detect, scale_boxes(boxes, inv), circle.cx * inv, circle.cy * inv, circle.radius * inv);
     result.overlay_path = save_overlay(overlay, opt.out);
 
     result.csv_path = opt.out / "die_map.csv";
@@ -197,7 +190,7 @@ CutResult cut_patches(const Options& opt, double resolution_um) {
         write_csv_row(csv, box, name);
     }
 
-    print_cut_summary(opt, xml, img_w, img_h, resolution_um, lut, cx, cy, radius, result);
+    print_cut_summary(opt, xml, img_w, img_h, resolution_um, lut, circle.cx, circle.cy, circle.radius, result);
     return result;
 }
 

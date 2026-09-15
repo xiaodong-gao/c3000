@@ -3,6 +3,7 @@
 #include "die_cut.h"
 #include "die_inspect.h"
 #include "die_util.h"
+#include "SingleDiePipeline.h"
 
 #include <algorithm>
 #include <iostream>
@@ -140,6 +141,10 @@ void resolve_job_outputs(Options& one, const Options& opt, const Job& job, size_
     one.image = job.image;
     one.xml = job.xml;
     one.out = job.out;
+    if (opt.mode == InspectMode::SingleDie) {
+        one.patch_out.clear();
+        return;
+    }
     if (!opt.patch_out.empty()) {
         one.patch_out = job_count == 1 ? opt.patch_out : (opt.patch_out / job.name);
     } else {
@@ -219,7 +224,7 @@ int run(Options opt) {
         throw std::runtime_error("每个像素对应的 um 必须大于 0");
     }
 
-    if (!opt.eval_patch_dir.empty()) {
+    if (opt.mode != InspectMode::SingleDie && !opt.eval_patch_dir.empty()) {
         if (opt.eval_truth_dir.empty()) {
             throw std::runtime_error("patch 评测需要指定 eval_truth_dir");
         }
@@ -246,7 +251,8 @@ int run(Options opt) {
 
     const double resolution_um = opt.resolution_um;
     const auto jobs = collect_jobs(opt);
-    std::cout << "共 " << jobs.size() << " 组 PNG/XML 待切割\n";
+    std::cout << "共 " << jobs.size() << " 组 PNG/XML 待处理\n";
+    std::cout << "模式: " << (opt.mode == InspectMode::SingleDie ? "Single Die" : "Die-to-Die") << '\n';
     std::cout << "分辨率: " << resolution_um << " um/px\n";
     int failed = 0;
     for (size_t i = 0; i < jobs.size(); ++i) {
@@ -256,8 +262,15 @@ int run(Options opt) {
         std::cout << "\n[" << (i + 1) << "/" << jobs.size() << "] " << job.name << '\n';
         std::cout << "  PNG: " << job.image.string() << '\n';
         std::cout << "  XML: " << job.xml.string() << '\n';
-        std::cout << "  输出: " << one.patch_out.string() << '\n';
+        std::cout << "  输出: " << one.out.string() << '\n';
         try {
+            if (one.mode == InspectMode::SingleDie) {
+                std::cout << "  链路: 只切圆形 ROI -> SingleDie（不切 patch）\n";
+                inspect_singledie(one);
+                continue;
+            }
+            std::cout << "  链路: 切 die patch -> Die-to-Die\n";
+            std::cout << "  输出 patches: " << one.patch_out.string() << '\n';
             TemplateCache templates;
             if (one.inspect && !one.template_path.empty()) {
                 templates = load_templates(one.template_path);

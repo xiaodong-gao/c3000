@@ -9,6 +9,7 @@
 #include <optional>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 namespace cutdie {
 namespace {
@@ -48,6 +49,15 @@ int attr_i(const std::string& text, const std::string& name) {
         throw std::runtime_error("缺少属性 " + name);
     }
     return std::stoi(*v);
+}
+
+bool attr_b(const std::string& text, const std::string& name, bool fallback = false) {
+    const auto v = find_attr(text, name);
+    if (!v) {
+        return fallback;
+    }
+    const std::string s = to_lower(*v);
+    return s == "true" || s == "1" || s == "yes";
 }
 
 std::string extract_open_tag(const std::string& xml, const std::string& tag) {
@@ -213,6 +223,7 @@ DieMap parse_die_map(const fs::path& xml_path) {
     m.origin_offset_y = attr_d(layout, "OriginalDieOffsetY");
     m.scribe_w = attr_d(layout, "ScribeLineWidth");
     m.scribe_h = attr_d(layout, "ScribeLineHeight");
+    m.patterned = attr_b(layout, "Enabled", true);
     try {
         const std::string trimming = extract_open_tag(xml, "Trimming");
         m.trim_cx = attr_d(trimming, "CenterX");
@@ -222,6 +233,23 @@ DieMap parse_die_map(const fs::path& xml_path) {
         m.trim_cx = 0;
         m.trim_cy = 0;
         m.trim_size = 0;
+    }
+    try {
+        const std::string gray = extract_open_tag(xml, "GrayValueRange");
+        m.gray_min = static_cast<int>(attr_d(gray, "Min", 0.0));
+        m.gray_max = static_cast<int>(attr_d(gray, "Max", 255.0));
+        if (m.gray_min < 0) {
+            m.gray_min = 0;
+        }
+        if (m.gray_max > 255) {
+            m.gray_max = 255;
+        }
+        if (m.gray_max < m.gray_min) {
+            std::swap(m.gray_min, m.gray_max);
+        }
+    } catch (const std::runtime_error&) {
+        m.gray_min = 0;
+        m.gray_max = 255;
     }
 
     const std::string skip_tag = "<SkippedDie";
@@ -235,6 +263,28 @@ DieMap parse_die_map(const fs::path& xml_path) {
         p = e + 1;
     }
     return m;
+}
+
+WaferCircle make_wafer_circle(const DieMap& xml, int img_w, int img_h, double resolution_um, int lut) {
+    if (resolution_um <= 0.0) {
+        throw std::runtime_error("每个像素对应的 um 必须大于 0");
+    }
+    if (img_w <= lut || img_h <= 0) {
+        throw std::runtime_error("图像尺寸无法计算圆形 ROI");
+    }
+    const double px_per_mm = 1000.0 / resolution_um;
+    const int wafer_w = img_w - lut;
+    WaferCircle c;
+    c.lut = lut;
+    c.cx = lut + wafer_w / 2.0 + xml.trim_cx * px_per_mm;
+    c.cy = img_h / 2.0 - xml.trim_cy * px_per_mm;
+    // 圆形 ROI 用物理晶圆半径。EdgeOffset / TrimSize 只用于 die 是否落在片内，不能拿来缩小检测圆。
+    const double wafer_radius_mm = xml.wafer_diameter / 2.0;
+    if (wafer_radius_mm <= 0.0) {
+        throw std::runtime_error("对齐配置中的晶圆半径无效");
+    }
+    c.radius = wafer_radius_mm * px_per_mm;
+    return c;
 }
 
 double infer_resolution_um(const fs::path& path, double fallback) {
