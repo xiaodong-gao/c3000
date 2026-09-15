@@ -63,6 +63,51 @@ struct LargeWhiteParams {
     int tophatSize = 0;          // 白帽核宽；<3 关闭。用来抓暗底上的浅小白点
     double tophatMin = 0.0;      // 白帽响应下限；>0 时另走一条浅点掩膜
     double tophatFloor = 0.0;    // 浅点还须灰度 >= 此值；<=0 则用 50
+    int tophatMinArea = 0;       // >0 时白帽通路用独立面积下限
+    int tophatMaxArea = 0;       // >0 时白帽通路面积上限
+    double tophatMinFill = 0.0;  // >0 时白帽通路填充率；否则用 minFill
+    double tophatMaxAspect = 0.0;// >0 时白帽通路长宽比；否则用 maxAspectRatio
+    int tophatStreetBand = 0;    // 白帽掩膜挖掉中心划片槽带；0 关闭
+    int tophatBorderMargin = 0;  // 白帽丢掉贴边块；0 关闭
+    double tophatMinPeak = 0.0;  // 白帽块内灰度峰值下限；0 关闭
+};
+
+struct DarkRegionParams {
+    bool enable = false;           // 在本颗 die 上按黑帽抓紧凑暗粒子（不依赖邻居）
+    int blackhatSize = 15;         // 黑帽核宽；<3 关闭
+    double blackhatMin = 18.0;     // 黑帽响应下限
+    double belowMedian = 16.0;     // 像素还须 <= 有效区中值 - 此值，避开网格/划片槽
+    double grayMin = 50.0;         // 丢掉片外纯黑
+    double grayMax = 220.0;        // 丢掉切割白边
+    int minArea = 16;
+    int maxArea = 180;
+    double minFill = 0.30;
+    double maxAspectRatio = 3.5;
+    int closeSize = 0;             // >=3：浅点第二通路先闭运算再提块
+    double faintBlackhatMin = 0.0; // >0 启用浅点通路
+    double faintBelowMedian = 0.0; // 浅点相对中值；<=0 则用 belowMedian
+    int faintMinArea = 48;
+    double faintMinFill = 0.50;
+    double faintMaxAspect = 1.7;
+    int streetBand = 0;            // 浅点丢掉中心划片槽带；0 关闭
+    int borderMargin = 0;          // 浅点丢掉贴边块；0 关闭
+    int faintSmallMinArea = 0;     // >0：再收面积更小但黑帽更强的浅点
+    int faintSmallMaxArea = 47;
+    double faintSmallMinFill = 0.36;
+    double faintSmallMaxAspect = 2.4;
+    double faintSmallHatMin = 0.0; // 小浅点块内黑帽峰值下限；<=0 关闭
+    int edgeBrightMin = 0;         // >0：白像素数达到此值且黑像素达到 edgeDarkMin 时视为片边 die
+    int edgeDarkMin = 0;
+    double edgeGrayMin = 90.0;
+    double edgeGrayMax = 220.0;
+    double edgeBlackhatMin = 14.0;
+    double edgeBelowMedian = 10.0;
+    int edgeMinArea = 0;           // >0 启用片边浅小点通路（不挖槽、不丢贴边）
+    int edgeMaxArea = 150;
+    double edgeMinFill = 0.30;
+    double edgeMaxAspect = 3.5;
+    int edgeNearCut = 0;           // >0：只保留距切割白边这么多像素内的浅点
+    double edgeBlackFrac = 0.65;   // 黑像素须集中在图像上/下 45%，排除左右片边
 };
 
 struct DefectDetectParams {
@@ -73,6 +118,7 @@ struct DefectDetectParams {
     BlobFilterParams blob;
     DefectFilterParams filter;
     LargeWhiteParams largeWhite;
+    DarkRegionParams darkRegion;
 };
 
 enum class DefectPolarity { Unknown, Bright, Dark, Mixed };
@@ -154,6 +200,9 @@ std::vector<DefectCandidate> extractDefectCandidates(const cv::Mat& blobMask,
 
 std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
                                                       const LargeWhiteParams& params);
+
+std::vector<DefectCandidate> extractDarkRegions(const cv::Mat& image,
+                                                const DarkRegionParams& params);
 
 std::vector<DefectCandidate> filterDefects(const std::vector<DefectCandidate>& candidates,
                                            const BlobFilterParams& blob,

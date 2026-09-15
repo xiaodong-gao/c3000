@@ -24,12 +24,12 @@ int main() {
         cutdie::Options opt;
 
         // ========== 输入 / 输出 ==========
-        opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-gray";
-        opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050.png";
-        opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050.xml";
+        opt.dir = "C:/Users/aspiring135/Desktop/datasets/46um-gray";
+        opt.image = "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046.png";
+        opt.xml = "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046.xml";
         opt.out.clear();                   // 空则写到 <图像目录>/<图像名>/
         opt.patch_out.clear();             // 空则写到 <out>/patches
-        opt.resolution_um = 50.0;          // 每个像素对应多少 um
+        opt.resolution_um = 46.0;          // 每个像素对应多少 um
         opt.keep_skipped = false;          // 是否保存 XML 中标记跳过的 die
         opt.recursive = false;             // 是否递归扫描输入目录
         opt.overlay_preview_px = 8000;     // die 预览图最长边；缺陷原图仍按原始分辨率保存
@@ -70,19 +70,19 @@ int main() {
         // ========== 自适应阈值（融合差分） ==========
         opt.defect.adaptive.blockSize = 31;  // 局部窗口，奇数；<=0 则按图像尺寸自动
         opt.defect.adaptive.k = 4.0;
-        opt.defect.adaptive.minAbs = 14.0;   // L2 绝对下限，压掉晶粒噪声
+        opt.defect.adaptive.minAbs = 18.0;   // L2 下限，压掉网格纹理
 
         // ========== 有符号差分极性（data - template） ==========
-        opt.defect.signedDiff.T = 14.0;     // +T 亮缺陷；<=0 则按 MAD 自动
-        opt.defect.signedDiff.darkT = 10.0; // 暗缺陷：signed < -darkT；0 则与 T 相同
+        opt.defect.signedDiff.T = 16.0;     // +T 亮缺陷；<=0 则按 MAD 自动
+        opt.defect.signedDiff.darkT = 14.0; // 暗缺陷：signed < -darkT；0 则与 T 相同
 
         // ========== 小黑点增强（黑帽） ==========
-        opt.defect.darkSpot.enableBlackHat = false;
+        opt.defect.darkSpot.enableBlackHat = true;
         opt.defect.darkSpot.kernel = 15;
-        opt.defect.darkSpot.minResponse = 8.0;
+        opt.defect.darkSpot.minResponse = 12.0;
 
         // ========== 形态学 ==========
-        opt.defect.morph.openSize = 3;
+        opt.defect.morph.openSize = 0;       // 小黑点不要开运算，3x3 会吃掉
         opt.defect.morph.closeSize = 3;
         opt.defect.morph.dilateSize = 0;
         opt.defect.morph.erodeSize = 0;
@@ -90,38 +90,83 @@ int main() {
         opt.defect.morph.darkOpenSize = 0;
 
         // ========== Blob / 几何过滤 ==========
-        opt.defect.blob.minArea = 25;           // 顶边 16x10 黑点，开运算后面积会变小
-        opt.defect.blob.maxArea = 0;
-        opt.defect.blob.minWidth = 4;
-        opt.defect.blob.minHeight = 4;
-        opt.defect.blob.maxAspectRatio = 3.0;
+        // 0046 真值是图案上的紧凑圆黑点（约 8–120 px），不是片边白区
+        opt.defect.blob.minArea = 8;
+        opt.defect.blob.maxArea = 250;       // 丢掉片外大块黑区
+        opt.defect.blob.minWidth = 3;
+        opt.defect.blob.minHeight = 3;
+        opt.defect.blob.maxAspectRatio = 4.0;
         opt.defect.blob.borderMargin = 4;
         opt.defect.blob.borderStripAspect = 2.5;  // 贴边细长条才丢；紧凑贴边黑点保留
-        opt.defect.blob.minBrightArea = 400;  // 小亮斑多为邻居缺陷反相；真亮缺陷走 largeWhite
+        opt.defect.blob.minBrightArea = 400;
 
         // ========== 亮/暗缺陷过滤 ==========
-        // 0051 是 33x33 patch，真值是暗底白点/块状。D2D 关掉，只走 largeWhite
+        // 0046 名单是图案上的圆黑点。D2D 关掉：片边对位会打出大量碎暗斑
         opt.defect.filter.keepBright = false;
         opt.defect.filter.keepDark = false;
         opt.defect.filter.keepMixed = false;
         opt.defect.filter.keepUnknown = false;
-        opt.defect.filter.minMeanL2 = 10.0;
-        opt.defect.filter.minAbsMeanSigned = 8.0;
+        opt.defect.filter.minMeanL2 = 14.0;
+        opt.defect.filter.minAbsMeanSigned = 12.0;
 
-        // ========== 白点 / 块状（0051：暗底浅小白点 + 片边块状）==========
-        // 灰度 threshold=70 抓块状；白帽单独提浅点，避免和亮核并成细长条被长宽比丢掉
-        // tophatMin=24、tophatFloor=50：压掉灰度 48–49 的晶粒尾巴，仍保留峰值 >=50 的浅白点
+        // ========== 白色方框：近 255 的大块近方形白区；关掉白帽，网格小亮点会大面积过检 ==========
         opt.defect.largeWhite.enable = true;
-        opt.defect.largeWhite.threshold = 70.0;
-        opt.defect.largeWhite.minArea = 1;
-        opt.defect.largeWhite.minFill = 0.20;
-        opt.defect.largeWhite.maxAspectRatio = 20.0;
+        opt.defect.largeWhite.threshold = 230.0;
+        opt.defect.largeWhite.minArea = 7000;
+        opt.defect.largeWhite.minFill = 0.35;
+        opt.defect.largeWhite.maxAspectRatio = 1.6;
         opt.defect.largeWhite.morphSize = 0;
         opt.defect.largeWhite.maxBackground = 0.0;
         opt.defect.largeWhite.backgroundMargin = 4;
-        opt.defect.largeWhite.tophatSize = 7;
-        opt.defect.largeWhite.tophatMin = 24.0;
-        opt.defect.largeWhite.tophatFloor = 50.0;
+        opt.defect.largeWhite.tophatSize = 0;
+        opt.defect.largeWhite.tophatMin = 0.0;
+        opt.defect.largeWhite.tophatFloor = 0.0;
+        opt.defect.largeWhite.tophatMinArea = 0;
+        opt.defect.largeWhite.tophatMaxArea = 0;
+        opt.defect.largeWhite.tophatMinFill = 0.0;
+        opt.defect.largeWhite.tophatMaxAspect = 0.0;
+        opt.defect.largeWhite.tophatStreetBand = 0;
+        opt.defect.largeWhite.tophatBorderMargin = 0;
+        opt.defect.largeWhite.tophatMinPeak = 0.0;
+
+        // ========== 本颗暗粒子（只收对比够、比较圆的黑点）==========
+        opt.defect.darkRegion.enable = true;
+        opt.defect.darkRegion.blackhatSize = 15;
+        opt.defect.darkRegion.blackhatMin = 16.0;
+        opt.defect.darkRegion.belowMedian = 16.0;
+        opt.defect.darkRegion.grayMin = 90.0;
+        opt.defect.darkRegion.grayMax = 220.0;
+        opt.defect.darkRegion.minArea = 16;
+        opt.defect.darkRegion.maxArea = 180;
+        opt.defect.darkRegion.minFill = 0.40;
+        opt.defect.darkRegion.maxAspectRatio = 2.2;
+        // 浅一点的小黑点：闭运算拼块，躲开划片槽和贴边；小面积还须黑帽更强
+        opt.defect.darkRegion.closeSize = 3;
+        opt.defect.darkRegion.faintBlackhatMin = 14.0;
+        opt.defect.darkRegion.faintBelowMedian = 10.0;
+        opt.defect.darkRegion.faintMinArea = 48;
+        opt.defect.darkRegion.faintMinFill = 0.42;
+        opt.defect.darkRegion.faintMaxAspect = 2.0;
+        opt.defect.darkRegion.streetBand = 8;
+        opt.defect.darkRegion.borderMargin = 6;
+        opt.defect.darkRegion.faintSmallMinArea = 19;
+        opt.defect.darkRegion.faintSmallMaxArea = 21;
+        opt.defect.darkRegion.faintSmallMinFill = 0.40;
+        opt.defect.darkRegion.faintSmallMaxAspect = 2.0;
+        opt.defect.darkRegion.faintSmallHatMin = 24.0;
+        // 片边浅小点：只对上下切割边，且只收靠近白边的点，避免左右片边过检
+        opt.defect.darkRegion.edgeBrightMin = 2500;
+        opt.defect.darkRegion.edgeDarkMin = 2000;
+        opt.defect.darkRegion.edgeGrayMin = 90.0;
+        opt.defect.darkRegion.edgeGrayMax = 220.0;
+        opt.defect.darkRegion.edgeBlackhatMin = 16.0;
+        opt.defect.darkRegion.edgeBelowMedian = 10.0;
+        opt.defect.darkRegion.edgeMinArea = 10;
+        opt.defect.darkRegion.edgeMaxArea = 120;
+        opt.defect.darkRegion.edgeMinFill = 0.34;
+        opt.defect.darkRegion.edgeMaxAspect = 2.8;
+        opt.defect.darkRegion.edgeNearCut = 40;
+        opt.defect.darkRegion.edgeBlackFrac = 0.70;
 
         if (opt.resolution_um <= 0.0) {
             throw std::runtime_error("每个像素对应的 um 必须大于 0");

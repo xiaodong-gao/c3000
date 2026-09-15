@@ -57,11 +57,11 @@ bool d2d_enabled(const Options& opt) {
 }
 
 void merge_large_white(const cv::Mat& data, const Options& opt, PipelineOutput& pipe) {
-    if (!opt.defect.largeWhite.enable || data.empty()) {
+    if (data.empty()) {
         return;
     }
     std::vector<DefectCandidate> crop_cands;
-    crop_cands.reserve(pipe.candidates.size() + 4);
+    crop_cands.reserve(pipe.candidates.size() + 8);
     for (DefectCandidate c : pipe.candidates) {
         c.bbox.x += pipe.commonRoi.x;
         c.bbox.y += pipe.commonRoi.y;
@@ -69,24 +69,30 @@ void merge_large_white(const cv::Mat& data, const Options& opt, PipelineOutput& 
         c.centroid.y += pipe.commonRoi.y;
         crop_cands.push_back(c);
     }
-    const std::vector<DefectCandidate> whites =
-        extractLargeWhiteRegions(data, opt.defect.largeWhite);
-    for (const auto& w : whites) {
-        bool overlap = false;
-        for (const auto& e : crop_cands) {
-            if (e.polarity != DefectPolarity::Bright) {
-                continue;
+    const auto append_unique = [&](const std::vector<DefectCandidate>& extra, DefectPolarity pol) {
+        for (const auto& w : extra) {
+            bool overlap = false;
+            for (const auto& e : crop_cands) {
+                if (e.polarity != pol) {
+                    continue;
+                }
+                const cv::Rect hit = e.bbox & w.bbox;
+                const int need = std::max(1, static_cast<int>(0.3 * w.bbox.area()));
+                if (hit.area() >= need) {
+                    overlap = true;
+                    break;
+                }
             }
-            const cv::Rect hit = e.bbox & w.bbox;
-            const int need = std::max(1, static_cast<int>(0.3 * w.bbox.area()));
-            if (hit.area() >= need) {
-                overlap = true;
-                break;
+            if (!overlap) {
+                crop_cands.push_back(w);
             }
         }
-        if (!overlap) {
-            crop_cands.push_back(w);
-        }
+    };
+    if (opt.defect.largeWhite.enable) {
+        append_unique(extractLargeWhiteRegions(data, opt.defect.largeWhite), DefectPolarity::Bright);
+    }
+    if (opt.defect.darkRegion.enable) {
+        append_unique(extractDarkRegions(data, opt.defect.darkRegion), DefectPolarity::Dark);
     }
     int rec_id = 0;
     for (auto& c : crop_cands) {
@@ -610,6 +616,27 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
                 bool overlap = false;
                 for (const auto& e : crop_cands) {
                     if (e.polarity != DefectPolarity::Bright) {
+                        continue;
+                    }
+                    const cv::Rect hit = e.bbox & w.bbox;
+                    const int need = std::max(1, static_cast<int>(0.3 * w.bbox.area()));
+                    if (hit.area() >= need) {
+                        overlap = true;
+                        break;
+                    }
+                }
+                if (!overlap) {
+                    crop_cands.push_back(w);
+                }
+            }
+        }
+        if (opt.defect.darkRegion.enable) {
+            const std::vector<DefectCandidate> darks =
+                extractDarkRegions(data, opt.defect.darkRegion);
+            for (const auto& w : darks) {
+                bool overlap = false;
+                for (const auto& e : crop_cands) {
+                    if (e.polarity != DefectPolarity::Dark) {
                         continue;
                     }
                     const cv::Rect hit = e.bbox & w.bbox;

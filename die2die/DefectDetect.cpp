@@ -508,7 +508,8 @@ std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
         cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
     };
 
-    auto extractFromMask = [&](const cv::Mat& mask) {
+    auto extractFromMask = [&](const cv::Mat& mask, int minArea, int maxArea, double minFill,
+                               double maxAspect, double minPeak, int streetBand, int borderMargin) {
         std::vector<DefectCandidate> found;
         if (mask.empty()) {
             return found;
@@ -521,22 +522,37 @@ std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
         for (int i = 1; i < count; ++i) {
             DefectCandidate c;
             c.area = stats.at<int>(i, cv::CC_STAT_AREA);
-            if (c.area < params.minArea) {
+            if (c.area < minArea) {
+                continue;
+            }
+            if (maxArea > 0 && c.area > maxArea) {
                 continue;
             }
             c.bbox = cv::Rect(stats.at<int>(i, cv::CC_STAT_LEFT), stats.at<int>(i, cv::CC_STAT_TOP),
                               stats.at<int>(i, cv::CC_STAT_WIDTH), stats.at<int>(i, cv::CC_STAT_HEIGHT));
+            if (borderMargin > 0) {
+                if (c.bbox.x <= borderMargin || c.bbox.y <= borderMargin ||
+                    c.bbox.x + c.bbox.width >= gray8.cols - borderMargin ||
+                    c.bbox.y + c.bbox.height >= gray8.rows - borderMargin) {
+                    continue;
+                }
+            }
             const int shortSide = std::min(c.bbox.width, c.bbox.height);
             const double aspect = shortSide > 0
                                       ? static_cast<double>(std::max(c.bbox.width, c.bbox.height)) /
                                             static_cast<double>(shortSide)
                                       : 0.0;
-            if (aspect > params.maxAspectRatio) {
+            if (aspect > maxAspect) {
                 continue;
             }
             const double boxArea =
                 static_cast<double>(c.bbox.width) * static_cast<double>(c.bbox.height);
-            if (boxArea <= 0.0 || static_cast<double>(c.area) / boxArea < params.minFill) {
+            if (boxArea <= 0.0 || static_cast<double>(c.area) / boxArea < minFill) {
+                continue;
+            }
+            c.centroid = cv::Point2d(centroids.at<double>(i, 0), centroids.at<double>(i, 1));
+            if (streetBand > 0 &&
+                std::abs(c.centroid.y - gray8.rows * 0.5) < static_cast<double>(streetBand)) {
                 continue;
             }
             if (params.maxBackground > 0.0) {
@@ -561,7 +577,6 @@ std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
                 }
             }
             c.labelId = i;
-            c.centroid = cv::Point2d(centroids.at<double>(i, 0), centroids.at<double>(i, 1));
             c.polarity = DefectPolarity::Bright;
             c.brightArea = c.area;
             double sum = 0.0;
@@ -586,6 +601,9 @@ std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
                 c.maxL2 = peak;
                 c.meanSigned = c.meanL2;
                 c.maxSigned = peak;
+            }
+            if (minPeak > 0.0 && c.maxL2 < minPeak) {
+                continue;
             }
             found.push_back(c);
         }
@@ -613,7 +631,8 @@ std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
     cv::Mat absMask;
     cv::compare(gray8, params.threshold, absMask, cv::CMP_GE);
     applyMorph(absMask);
-    out = extractFromMask(absMask);
+    out = extractFromMask(absMask, params.minArea, 0, params.minFill, params.maxAspectRatio, 0.0, 0,
+                          0);
 
     if (params.tophatSize >= 3 && params.tophatMin > 0.0) {
         int k = params.tophatSize;
@@ -630,8 +649,265 @@ std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
         cv::Mat brightEnough;
         cv::compare(gray8, floor, brightEnough, cv::CMP_GE);
         cv::bitwise_and(tmask, brightEnough, tmask);
+        if (params.tophatStreetBand > 0 && gray8.rows > params.tophatStreetBand * 2) {
+            const int y0 = std::max(0, gray8.rows / 2 - params.tophatStreetBand);
+            const int y1 = std::min(gray8.rows, gray8.rows / 2 + params.tophatStreetBand);
+            tmask(cv::Rect(0, y0, tmask.cols, y1 - y0)).setTo(0);
+        }
         applyMorph(tmask);
-        appendUnique(extractFromMask(tmask));
+        const int tminA = params.tophatMinArea > 0 ? params.tophatMinArea : params.minArea;
+        const int tmaxA = params.tophatMaxArea;
+        const double tfill = params.tophatMinFill > 0.0 ? params.tophatMinFill : params.minFill;
+        const double tasp =
+            params.tophatMaxAspect > 0.0 ? params.tophatMaxAspect : params.maxAspectRatio;
+        appendUnique(extractFromMask(tmask, tminA, tmaxA, tfill, tasp, params.tophatMinPeak, 0,
+                                     params.tophatBorderMargin));
+    }
+
+    int id = 0;
+    for (auto& c : out) {
+        c.id = ++id;
+    }
+    return out;
+}
+
+std::vector<DefectCandidate> extractDarkRegions(const cv::Mat& image,
+                                                const DarkRegionParams& params) {
+    std::vector<DefectCandidate> out;
+    if (!params.enable || image.empty() || params.blackhatSize < 3 || params.blackhatMin <= 0.0) {
+        return out;
+    }
+    cv::Mat gray;
+    if (image.channels() == 1) {
+        gray = image;
+    } else if (image.channels() == 3) {
+        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+    } else if (image.channels() == 4) {
+        cv::cvtColor(image, gray, cv::COLOR_BGRA2GRAY);
+    } else {
+        return out;
+    }
+    cv::Mat gray8;
+    if (gray.type() == CV_8UC1) {
+        gray8 = gray;
+    } else {
+        gray.convertTo(gray8, CV_8U);
+    }
+
+    cv::Mat valid;
+    cv::compare(gray8, params.grayMin, valid, cv::CMP_GT);
+    cv::Mat belowMax;
+    cv::compare(gray8, params.grayMax, belowMax, cv::CMP_LT);
+    cv::bitwise_and(valid, belowMax, valid);
+    if (cv::countNonZero(valid) < 32) {
+        return out;
+    }
+
+    std::vector<unsigned char> vals;
+    vals.reserve(static_cast<size_t>(cv::countNonZero(valid)));
+    for (int y = 0; y < gray8.rows; ++y) {
+        const unsigned char* row = gray8.ptr<unsigned char>(y);
+        const unsigned char* m = valid.ptr<unsigned char>(y);
+        for (int x = 0; x < gray8.cols; ++x) {
+            if (m[x]) {
+                vals.push_back(row[x]);
+            }
+        }
+    }
+    if (vals.empty()) {
+        return out;
+    }
+    const size_t mid = vals.size() / 2;
+    std::nth_element(vals.begin(), vals.begin() + static_cast<std::ptrdiff_t>(mid), vals.end());
+    const double median = static_cast<double>(vals[mid]);
+
+    int k = params.blackhatSize;
+    if ((k % 2) == 0) {
+        ++k;
+    }
+    const cv::Mat hatKernel =
+        cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(k, k));
+    cv::Mat hat;
+    cv::morphologyEx(gray8, hat, cv::MORPH_BLACKHAT, hatKernel);
+    auto collect = [&](const cv::Mat& bin, int minArea, int maxArea, double minFill, double maxAspect,
+                       int streetBand, int borderMargin, double minHat) {
+        std::vector<DefectCandidate> found;
+        if (bin.empty()) {
+            return found;
+        }
+        cv::Mat labels;
+        cv::Mat stats;
+        cv::Mat centroids;
+        const int count = cv::connectedComponentsWithStats(bin, labels, stats, centroids, 8, CV_32S);
+        for (int i = 1; i < count; ++i) {
+            DefectCandidate c;
+            c.area = stats.at<int>(i, cv::CC_STAT_AREA);
+            if (c.area < minArea) {
+                continue;
+            }
+            if (maxArea > 0 && c.area > maxArea) {
+                continue;
+            }
+            c.bbox = cv::Rect(stats.at<int>(i, cv::CC_STAT_LEFT), stats.at<int>(i, cv::CC_STAT_TOP),
+                              stats.at<int>(i, cv::CC_STAT_WIDTH), stats.at<int>(i, cv::CC_STAT_HEIGHT));
+            if (borderMargin > 0) {
+                if (c.bbox.x <= borderMargin || c.bbox.y <= borderMargin ||
+                    c.bbox.x + c.bbox.width >= gray8.cols - borderMargin ||
+                    c.bbox.y + c.bbox.height >= gray8.rows - borderMargin) {
+                    continue;
+                }
+            }
+            const int shortSide = std::min(c.bbox.width, c.bbox.height);
+            const double aspect = shortSide > 0
+                                      ? static_cast<double>(std::max(c.bbox.width, c.bbox.height)) /
+                                            static_cast<double>(shortSide)
+                                      : 0.0;
+            if (aspect > maxAspect) {
+                continue;
+            }
+            const double boxArea =
+                static_cast<double>(c.bbox.width) * static_cast<double>(c.bbox.height);
+            if (boxArea <= 0.0 || static_cast<double>(c.area) / boxArea < minFill) {
+                continue;
+            }
+            c.centroid = cv::Point2d(centroids.at<double>(i, 0), centroids.at<double>(i, 1));
+            if (streetBand > 0 &&
+                std::abs(c.centroid.y - gray8.rows * 0.5) < static_cast<double>(streetBand)) {
+                continue;
+            }
+            c.labelId = i;
+            c.polarity = DefectPolarity::Dark;
+            c.darkArea = c.area;
+            double sum = 0.0;
+            double peak = 0.0;
+            double hatPeak = 0.0;
+            int n = 0;
+            const cv::Rect roi = c.bbox & cv::Rect(0, 0, gray8.cols, gray8.rows);
+            for (int y = roi.y; y < roi.y + roi.height; ++y) {
+                const int* lab = labels.ptr<int>(y);
+                const unsigned char* row = gray8.ptr<unsigned char>(y);
+                const unsigned char* hrow = hat.ptr<unsigned char>(y);
+                for (int x = roi.x; x < roi.x + roi.width; ++x) {
+                    if (lab[x] != i) {
+                        continue;
+                    }
+                    const double v = static_cast<double>(row[x]);
+                    sum += v;
+                    peak = std::max(peak, 255.0 - v);
+                    hatPeak = std::max(hatPeak, static_cast<double>(hrow[x]));
+                    ++n;
+                }
+            }
+            if (n > 0) {
+                c.meanL2 = sum / static_cast<double>(n);
+                c.maxL2 = peak;
+                c.meanSigned = c.meanL2 - median;
+                c.maxSigned = peak;
+            }
+            if (minHat > 0.0 && hatPeak < minHat) {
+                continue;
+            }
+            found.push_back(c);
+        }
+        return found;
+    };
+
+    auto appendUnique = [&](const std::vector<DefectCandidate>& extra) {
+        for (const auto& w : extra) {
+            bool overlap = false;
+            for (const auto& e : out) {
+                const cv::Rect hit = e.bbox & w.bbox;
+                const int need = std::max(1, static_cast<int>(0.3 * std::min(w.bbox.area(), e.bbox.area())));
+                if (hit.area() >= need) {
+                    overlap = true;
+                    break;
+                }
+            }
+            if (!overlap) {
+                out.push_back(w);
+            }
+        }
+    };
+
+    auto makeMask = [&](double hatMin, double below) {
+        cv::Mat mask;
+        cv::compare(hat, hatMin, mask, cv::CMP_GE);
+        cv::bitwise_and(mask, valid, mask);
+        cv::Mat darkEnough;
+        cv::compare(gray8, median - below, darkEnough, cv::CMP_LE);
+        cv::bitwise_and(mask, darkEnough, mask);
+        return mask;
+    };
+
+    cv::Mat mask = makeMask(params.blackhatMin, params.belowMedian);
+    out = collect(mask, params.minArea, params.maxArea, params.minFill, params.maxAspectRatio,
+                  params.streetBand, 0, 0.0);
+
+    if (params.faintBlackhatMin > 0.0) {
+        cv::Mat faintMask = makeMask(params.faintBlackhatMin,
+                                     params.faintBelowMedian > 0.0 ? params.faintBelowMedian
+                                                                   : params.belowMedian);
+        if (params.closeSize >= 3) {
+            int ck = params.closeSize;
+            if ((ck % 2) == 0) {
+                ++ck;
+            }
+            const cv::Mat closeK = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(ck, ck));
+            cv::morphologyEx(faintMask, faintMask, cv::MORPH_CLOSE, closeK);
+        }
+        appendUnique(collect(faintMask, params.faintMinArea, params.maxArea, params.faintMinFill,
+                             params.faintMaxAspect, params.streetBand, params.borderMargin, 0.0));
+        if (params.faintSmallMinArea > 0 && params.faintSmallHatMin > 0.0) {
+            appendUnique(collect(faintMask, params.faintSmallMinArea, params.faintSmallMaxArea,
+                                 params.faintSmallMinFill, params.faintSmallMaxAspect,
+                                 params.streetBand, params.borderMargin, params.faintSmallHatMin));
+        }
+    }
+
+    if (params.edgeMinArea > 0 && params.edgeBrightMin > 0) {
+        cv::Mat brightCut;
+        cv::compare(gray8, 230, brightCut, cv::CMP_GE);
+        cv::Mat black;
+        cv::compare(gray8, 10, black, cv::CMP_LE);
+        const int nBright = cv::countNonZero(brightCut);
+        const int nDark = cv::countNonZero(black);
+        bool bottomCut = false;
+        bool topCut = false;
+        if (nBright >= params.edgeBrightMin && nDark >= params.edgeDarkMin && gray8.rows >= 8) {
+            const int yLo = std::min(gray8.rows - 1, std::max(1, static_cast<int>(0.55 * gray8.rows)));
+            const int yHi = std::max(1, std::min(gray8.rows - 1, static_cast<int>(0.45 * gray8.rows)));
+            const int nBlackLo = cv::countNonZero(black.rowRange(yLo, gray8.rows));
+            const int nBlackHi = cv::countNonZero(black.rowRange(0, yHi));
+            const double frac = params.edgeBlackFrac > 0.0 ? params.edgeBlackFrac : 0.65;
+            bottomCut = nBlackLo >= static_cast<int>(frac * nDark);
+            topCut = nBlackHi >= static_cast<int>(frac * nDark);
+        }
+        if (bottomCut || topCut) {
+            cv::Mat edgeValid;
+            cv::compare(gray8, params.edgeGrayMin, edgeValid, cv::CMP_GT);
+            cv::Mat edgeBelowMax;
+            cv::compare(gray8, params.edgeGrayMax, edgeBelowMax, cv::CMP_LT);
+            cv::bitwise_and(edgeValid, edgeBelowMax, edgeValid);
+            cv::Mat edgeMask;
+            cv::compare(hat, params.edgeBlackhatMin, edgeMask, cv::CMP_GE);
+            cv::bitwise_and(edgeMask, edgeValid, edgeMask);
+            cv::Mat edgeDark;
+            cv::compare(gray8, median - params.edgeBelowMedian, edgeDark, cv::CMP_LE);
+            cv::bitwise_and(edgeMask, edgeDark, edgeMask);
+            if (params.edgeNearCut > 0) {
+                int k = params.edgeNearCut * 2 + 1;
+                if ((k % 2) == 0) {
+                    ++k;
+                }
+                const cv::Mat nearK =
+                    cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(k, k));
+                cv::Mat nearCut;
+                cv::dilate(brightCut, nearCut, nearK);
+                cv::bitwise_and(edgeMask, nearCut, edgeMask);
+            }
+            appendUnique(collect(edgeMask, params.edgeMinArea, params.edgeMaxArea, params.edgeMinFill,
+                                 params.edgeMaxAspect, 0, 0, 0.0));
+        }
     }
 
     int id = 0;
