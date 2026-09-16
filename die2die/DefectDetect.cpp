@@ -631,8 +631,8 @@ std::vector<DefectCandidate> extractLargeWhiteRegions(const cv::Mat& image,
     cv::Mat absMask;
     cv::compare(gray8, params.threshold, absMask, cv::CMP_GE);
     applyMorph(absMask);
-    out = extractFromMask(absMask, params.minArea, 0, params.minFill, params.maxAspectRatio, 0.0, 0,
-                          0);
+    out = extractFromMask(absMask, params.minArea, params.maxArea, params.minFill,
+                          params.maxAspectRatio, 0.0, 0, 0);
 
     if (params.tophatSize >= 3 && params.tophatMin > 0.0) {
         int k = params.tophatSize;

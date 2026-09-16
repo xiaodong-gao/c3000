@@ -39,12 +39,12 @@ void apply_common_backend(cutdie::Options& opt) {
 void apply_d2d_recipe(cutdie::Options& opt) {
     opt.mode = cutdie::InspectMode::DieToDie;
 
-    opt.dir = "C:/Users/aspiring135/Desktop/datasets/46um-gray";
-    opt.image = "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046.png";
-    opt.xml = "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046.xml";
+    opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-0804";
+    opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-0804/0804-slot1.png";
+    opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-0804/0804-slot1.xml";
     opt.out.clear();
     opt.patch_out.clear();
-    opt.resolution_um = 46.0;
+    opt.resolution_um = 50.0;
     opt.keep_skipped = false;
     opt.recursive = false;
     opt.overlay_preview_px = 8000;
@@ -156,10 +156,10 @@ void apply_d2d_recipe(cutdie::Options& opt) {
 void apply_singledie_recipe(cutdie::Options& opt) {
     opt.mode = cutdie::InspectMode::SingleDie;
 
-    opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-no-partern-wafer";
-    opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-no-partern-wafer/50um-nopatern.png";
-    opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-no-partern-wafer/50um-nopatern.xml";
-    opt.out.clear();
+    opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-0804";
+    opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-0804/0804-slot3.png";
+    opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-0804/0804-slot3.xml";
+    opt.out = "C:/Users/aspiring135/Desktop/datasets/50um-0804";
     opt.patch_out.clear();
     opt.resolution_um = 50.0;
     opt.keep_skipped = false;
@@ -178,8 +178,9 @@ void apply_singledie_recipe(cutdie::Options& opt) {
     opt.singledie_normalize.minBackground = 1e-6f;
     opt.singledie_normalize.robustPercentile = true;
 
-    opt.singledie_detect.enableBright = true;
-    opt.singledie_detect.enableDark = true;
+    // 本片只走 largeWhite 抓贴边小白点；关掉残差亮/暗，避免把亮环当缺陷。
+    opt.singledie_detect.enableBright = false;
+    opt.singledie_detect.enableDark = false;
     opt.singledie_detect.brightThreshold = 0.025f;
     opt.singledie_detect.darkThreshold = 0.025f;
     opt.singledie_detect.morphologyKernel = 3;
@@ -232,11 +233,15 @@ void apply_singledie_recipe(cutdie::Options& opt) {
     opt.defect.filter.minMeanL2 = 14.0;
     opt.defect.filter.minAbsMeanSigned = 12.0;
 
+    // 0804-slot3 暗场小白点：左 3 / 右 4 / 下 10，共计 17。
+    // 阈值 50 抓住左侧浅点（峰值约 60）；maxArea 丢掉底部 notch（~900px）。
+    // 右侧 2 个真点贴边且面积<=4，不能开 isolatedInnerMargin。
     opt.defect.largeWhite.enable = true;
-    opt.defect.largeWhite.threshold = 120.0;
-    opt.defect.largeWhite.minArea = 1;
-    opt.defect.largeWhite.minFill = 0.0;
-    opt.defect.largeWhite.maxAspectRatio = 2.5;
+    opt.defect.largeWhite.threshold = 50.0;
+    opt.defect.largeWhite.minArea = 2;
+    opt.defect.largeWhite.maxArea = 50;
+    opt.defect.largeWhite.minFill = 0.50;
+    opt.defect.largeWhite.maxAspectRatio = 2.0;
     opt.defect.largeWhite.morphSize = 0;
     opt.defect.largeWhite.maxBackground = 0.0;
     opt.defect.largeWhite.backgroundMargin = 4;
@@ -250,11 +255,11 @@ void apply_singledie_recipe(cutdie::Options& opt) {
     opt.defect.largeWhite.tophatStreetBand = 0;
     opt.defect.largeWhite.tophatBorderMargin = 0;
     opt.defect.largeWhite.tophatMinPeak = 0.0;
-    opt.defect.largeWhite.isolatedMaxArea = 16;
-    opt.defect.largeWhite.isolatedThreshold = 80.0;
-    opt.defect.largeWhite.isolatedInnerMargin = 16;
+    opt.defect.largeWhite.isolatedMaxArea = 0;
+    opt.defect.largeWhite.isolatedThreshold = 0.0;
+    opt.defect.largeWhite.isolatedInnerMargin = 0;
 
-    opt.defect.darkRegion.enable = true;
+    opt.defect.darkRegion.enable = false;
     opt.defect.darkRegion.blackhatSize = 15;
     opt.defect.darkRegion.blackhatMin = 16.0;
     opt.defect.darkRegion.belowMedian = 16.0;
@@ -306,7 +311,7 @@ int main() {
         constexpr cutdie::InspectMode kInspectMode = cutdie::InspectMode::SingleDie;
 
         cutdie::Options opt;
-        if (kInspectMode == cutdie::InspectMode::DieToDie) {
+        if (kInspectMode == cutdie::InspectMode::SingleDie) {
             apply_singledie_recipe(opt);
         } else {
             apply_d2d_recipe(opt);

@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -115,7 +116,7 @@ double radius_inside_rim(const cv::Mat& gray, const WaferCircle& circle) {
     } else {
         r = expected - 18.0;  // 约 TrimSize 0.9mm @ 50um
     }
-    r -= 12.0;  // 收到亮环内侧
+    r -= 7.0;  // 收到亮环内侧，仍保住贴边真小白点
 
     const double max_r = std::min(std::min(circle.cx, circle.cy),
                                   std::min(gray.cols - 1.0 - circle.cx, gray.rows - 1.0 - circle.cy)) -
@@ -371,14 +372,15 @@ InspectResult inspect_singledie(const Options& opt) {
         }
     }
 
-    cv::Mat overlay = to_bgr(roi);
+    cv::Mat overlay = to_bgr(full);
     const int preview_px = opt.overlay_preview_px > 0 ? opt.overlay_preview_px : kDetectTarget;
     const double scale = std::max(overlay.cols, overlay.rows) / static_cast<double>(preview_px);
     const int thickness = std::max(1, cvRound(scale));
-    cv::circle(overlay, local_center, cvRound(circle.radius),
+    cv::circle(overlay, cv::Point(cvRound(circle.cx), cvRound(circle.cy)), cvRound(circle.radius),
                cv::Scalar(255, 180, 0), thickness, cv::LINE_AA);
 
-    const cv::Rect roi_bounds(0, 0, overlay.cols, overlay.rows);
+    const cv::Rect roi_bounds(0, 0, roi.cols, roi.rows);
+    const cv::Rect full_bounds(0, 0, overlay.cols, overlay.rows);
     int rec_id = 0;
     for (const auto& src : det.defects) {
         WaferDefect d;
@@ -400,8 +402,8 @@ InspectResult inspect_singledie(const Options& opt) {
         result.defects.push_back(d);
 
         const cv::Scalar color = src.bright ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 80, 0);
-        cv::Rect vis = d.bbox;
-        const int min_vis = 6;
+        cv::Rect vis(d.bbox.x + crop.x, d.bbox.y + crop.y, d.bbox.width, d.bbox.height);
+        const int min_vis = 16;
         if (vis.width < min_vis || vis.height < min_vis) {
             const int cx = vis.x + vis.width / 2;
             const int cy = vis.y + vis.height / 2;
@@ -409,11 +411,13 @@ InspectResult inspect_singledie(const Options& opt) {
             vis.y = cy - min_vis / 2;
             vis.width = min_vis;
             vis.height = min_vis;
-            vis &= roi_bounds;
+            vis &= full_bounds;
         }
-        cv::rectangle(overlay, vis.area() > 0 ? vis : d.bbox, color, std::max(1, thickness / 2));
-        const cv::Point center(cvRound(d.centroid.x), cvRound(d.centroid.y));
-        if (roi_bounds.contains(center)) {
+        cv::rectangle(overlay, vis.area() > 0 ? vis : cv::Rect(d.bbox.x + crop.x, d.bbox.y + crop.y,
+                                                              d.bbox.width, d.bbox.height),
+                      color, std::max(1, thickness / 2));
+        const cv::Point center(cvRound(d.centroid.x) + crop.x, cvRound(d.centroid.y) + crop.y);
+        if (full_bounds.contains(center)) {
             cv::circle(overlay, center, std::max(1, thickness), color, cv::FILLED, cv::LINE_AA);
         }
     }
@@ -421,6 +425,28 @@ InspectResult inspect_singledie(const Options& opt) {
     result.inspected = 1;
     result.defect_count = static_cast<int>(result.defects.size());
     result.overlay_path = save_png(overlay, result.overlay_path);
+
+    result.die_overlay_dir = opt.out / "defects";
+    fs::create_directories(result.die_overlay_dir);
+    const cv::Mat roi_bgr = to_bgr(roi);
+    for (const auto& d : result.defects) {
+        const int pad = std::max(32, std::max(d.bbox.width, d.bbox.height));
+        cv::Rect crop_box(d.bbox.x - pad, d.bbox.y - pad, d.bbox.width + 2 * pad,
+                          d.bbox.height + 2 * pad);
+        crop_box &= roi_bounds;
+        if (crop_box.empty()) {
+            continue;
+        }
+        cv::Mat view = roi_bgr(crop_box).clone();
+        cv::Rect local(d.bbox.x - crop_box.x, d.bbox.y - crop_box.y, d.bbox.width, d.bbox.height);
+        local &= cv::Rect(0, 0, view.cols, view.rows);
+        if (local.area() > 0) {
+            cv::rectangle(view, local, cv::Scalar(0, 0, 255), 2);
+        }
+        std::ostringstream name;
+        name << "defect_" << std::setfill('0') << std::setw(2) << d.id << ".png";
+        save_png(view, result.die_overlay_dir / name.str());
+    }
 
     std::ofstream csv(result.csv_path, std::ios::binary);
     if (!csv) {
@@ -438,7 +464,9 @@ InspectResult inspect_singledie(const Options& opt) {
     std::cout << "  SingleDie 完成: 缺陷 " << result.defect_count
               << "  (大白块 " << large_white_n << ")\n";
     std::cout << "  圆形 ROI: " << (opt.out / "wafer_circle_roi.png").string() << '\n';
-    std::cout << "  缺陷原图: " << result.overlay_path.string() << '\n';
+    std::cout << "  缺陷原图: " << result.overlay_path.string()
+              << "  (画在原始图像上)\n";
+    std::cout << "  单点裁剪: " << result.die_overlay_dir.string() << '\n';
     std::cout << "  缺陷清单: " << result.csv_path.string()
               << "  (坐标相对圆形 ROI，原图偏移 " << crop.x << "," << crop.y << ")\n";
     return result;
