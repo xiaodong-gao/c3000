@@ -4,6 +4,7 @@
 #include "die_inspect.h"
 #include "die_util.h"
 #include "SingleDiePipeline.h"
+#include "openvino_yolo26.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -224,7 +225,7 @@ int run(Options opt) {
         throw std::runtime_error("每个像素对应的 um 必须大于 0");
     }
 
-    if (opt.mode != InspectMode::SingleDie && !opt.eval_patch_dir.empty()) {
+    if (opt.mode == InspectMode::DieToDie && !opt.eval_patch_dir.empty()) {
         if (opt.eval_truth_dir.empty()) {
             throw std::runtime_error("patch 评测需要指定 eval_truth_dir");
         }
@@ -252,7 +253,13 @@ int run(Options opt) {
     const double resolution_um = opt.resolution_um;
     const auto jobs = collect_jobs(opt);
     std::cout << "共 " << jobs.size() << " 组 PNG/XML 待处理\n";
-    std::cout << "模式: " << (opt.mode == InspectMode::SingleDie ? "Single Die" : "Die-to-Die") << '\n';
+    const char* mode_name = "Die-to-Die";
+    if (opt.mode == InspectMode::SingleDie) {
+        mode_name = "Single Die";
+    } else if (opt.mode == InspectMode::YoloOpenVino) {
+        mode_name = "yolo-openvino";
+    }
+    std::cout << "模式: " << mode_name << '\n';
     std::cout << "分辨率: " << resolution_um << " um/px\n";
     int failed = 0;
     for (size_t i = 0; i < jobs.size(); ++i) {
@@ -267,6 +274,41 @@ int run(Options opt) {
             if (one.mode == InspectMode::SingleDie) {
                 std::cout << "  链路: 只切圆形 ROI -> SingleDie（不切 patch）\n";
                 inspect_singledie(one);
+                continue;
+            }
+            if (one.mode == InspectMode::YoloOpenVino) {
+                std::cout << "  链路: 切 die patch -> yolo-openvino 语义分割\n";
+                std::cout << "  输出 patches: " << one.patch_out.string() << '\n';
+                if (one.yolo_model.empty()) {
+                    throw std::runtime_error("yolo-openvino 未指定模型");
+                }
+                const CutResult cut = cut_patches(one, resolution_um);
+                if (cut.saved <= 0) {
+                    throw std::runtime_error("没有可推理的 die patch");
+                }
+                yolo26::Defaults defaults;
+                defaults.model = one.yolo_model.string();
+                defaults.images = cut.patch_dir.string();
+                defaults.output = (one.out / "yolo-openvino").string();
+                defaults.device = one.yolo_device.empty() ? "CPU" : one.yolo_device;
+                defaults.width = one.yolo_imgsz;
+                defaults.height = one.yolo_imgsz;
+                defaults.batch = one.yolo_batch;
+                defaults.requests = one.yolo_requests;
+                defaults.confidence = one.yolo_confidence;
+                defaults.use_fp16 = one.yolo_fp16;
+                defaults.throughput_mode = one.yolo_throughput;
+                std::cout << "  模型: " << defaults.model << '\n';
+                std::cout << "  输入: " << defaults.width << "x" << defaults.height
+                          << "  batch " << defaults.batch << '\n';
+                std::cout << "  推理输出: " << defaults.output << '\n';
+#if defined(_WIN64)
+                if (yolo26::run(yolo26::Task::SemanticSegmentation, defaults) != 0) {
+                    throw std::runtime_error("yolo-openvino 推理失败");
+                }
+#else
+                throw std::runtime_error("yolo-openvino 仅支持 x64");
+#endif
                 continue;
             }
             std::cout << "  链路: 切 die patch -> Die-to-Die\n";

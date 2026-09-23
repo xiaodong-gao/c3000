@@ -73,7 +73,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <OpenCVRoot>C:\development\opencv-4.14.0-windows\build</OpenCVRoot>
-    <IncludePathList>$(ProjectDir);$(ProjectDir)app;$(ProjectDir)die2die;$(ProjectDir)ams;$(ProjectDir)utils;$(ProjectDir)singledie</IncludePathList>
+    <OpenVINORoot>$(ProjectDir)openvino\openvino_toolkit_windows_2026.3.1.22476.56d9685302d_x86_64\openvino_toolkit_windows_2026.3.1.22476.56d9685302d_x86_64\</OpenVINORoot>
+    <IncludePathList>$(ProjectDir);$(ProjectDir)app;$(ProjectDir)die2die;$(ProjectDir)ams;$(ProjectDir)utils;$(ProjectDir)singledie;$(ProjectDir)yolo</IncludePathList>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -115,14 +116,14 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(IncludePathList);$(CudaToolkitDir)\include;$(OpenCVRoot)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IncludePathList);$(CudaToolkitDir)\include;$(OpenCVRoot)\include;$(OpenVINORoot)runtime\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenCVRoot)\x64\vc16\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>cudart_static.lib;cufft.lib;opencv_world4140d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OpenCVRoot)\x64\vc16\lib;$(OpenVINORoot)runtime\lib\intel64\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>cudart_static.lib;cufft.lib;opencv_world4140d.lib;openvinod.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -132,7 +133,9 @@
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
     </CudaCompile>
     <PostBuildEvent>
-      <Command>copy /Y "$(OpenCVRoot)\x64\vc16\bin\opencv_world4140d.dll" "$(OutDir)"</Command>
+      <Command>copy /Y "$(OpenCVRoot)\x64\vc16\bin\opencv_world4140d.dll" "$(OutDir)"
+xcopy /Y /Q "$(OpenVINORoot)runtime\bin\intel64\Debug\*.dll" "$(OutDir)"
+xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -145,14 +148,14 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(IncludePathList);$(CudaToolkitDir)\include;$(OpenCVRoot)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IncludePathList);$(CudaToolkitDir)\include;$(OpenCVRoot)\include;$(OpenVINORoot)runtime\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenCVRoot)\x64\vc16\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>cudart_static.lib;cufft.lib;opencv_world4140.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OpenCVRoot)\x64\vc16\lib;$(OpenVINORoot)runtime\lib\intel64\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>cudart_static.lib;cufft.lib;opencv_world4140.lib;openvino.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -162,7 +165,9 @@
       <CodeGeneration>compute_86,sm_86</CodeGeneration>
     </CudaCompile>
     <PostBuildEvent>
-      <Command>copy /Y "$(OpenCVRoot)\x64\vc16\bin\opencv_world4140.dll" "$(OutDir)"</Command>
+      <Command>copy /Y "$(OpenCVRoot)\x64\vc16\bin\opencv_world4140.dll" "$(OutDir)"
+xcopy /Y /Q "$(OpenVINORoot)runtime\bin\intel64\Release\*.dll" "$(OutDir)"
+xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -180,6 +185,9 @@
     </Filter>
     <Filter Include="singledie">
       <UniqueIdentifier>{E5F6A7B8-C9D0-1234-EF01-345678901234}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="yolo">
+      <UniqueIdentifier>{F6A7B8C9-D0E1-2345-F012-456789012345}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -238,6 +246,10 @@
     </ClCompile>
     <ClCompile Include="singledie\SingleDiePipeline.cpp">
       <Filter>singledie</Filter>
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="yolo\openvino_yolo26.cpp">
+      <Filter>yolo</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
   </ItemGroup>
@@ -301,6 +313,9 @@
     </ClInclude>
     <ClInclude Include="singledie\SingleDiePipeline.h">
       <Filter>singledie</Filter>
+    </ClInclude>
+    <ClInclude Include="yolo\openvino_yolo26.hpp">
+      <Filter>yolo</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

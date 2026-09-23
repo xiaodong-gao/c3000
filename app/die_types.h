@@ -22,7 +22,7 @@ inline constexpr const char* kDefaultDir = "C:/Users/aspiring135/Desktop/dataset
 enum class AlignMethod { PhaseCuda, PhaseCpu, EccCuda, EccCpu };
 enum class HistogramMethod { Auto, Cpu, Cuda };
 enum class NormalizeMethod { Auto, Cpu, Cuda };
-enum class InspectMode { DieToDie, SingleDie };
+enum class InspectMode { DieToDie, YoloOpenVino, SingleDie };
 
 struct DieMap {
     double wafer_diameter = 0;
@@ -102,8 +102,19 @@ struct Options {
     int overlay_preview_px = kDetectTarget;
 
     // DieToDie：切 die patch，用邻居/外部模板做 D2D。
+    // YoloOpenVino：切 die patch，用 OpenVINO YOLO26 语义分割推理。
     // SingleDie：只切对齐 XML 中的圆形 ROI，整圆直接走 singledie，不切 die patch。
     InspectMode mode = InspectMode::DieToDie;
+
+    // YoloOpenVino：best.xml 由 dynamic ONNX 转出，输入 [?,3,64,64]，语义分割。
+    fs::path yolo_model;
+    std::string yolo_device = "CPU";
+    int yolo_imgsz = 64;
+    int yolo_batch = 8;
+    int yolo_requests = 0;
+    float yolo_confidence = 0.25f;
+    bool yolo_fp16 = true;
+    bool yolo_throughput = false;
     singledie::IntensityNormalizeParams singledie_normalize;
     singledie::DetectionParams singledie_detect;
 };

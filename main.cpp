@@ -1,4 +1,4 @@
-// 同一工程内切换 Single Die / Die-to-Die。
+// 同一工程内切换 Single Die / Die-to-Die / yolo-openvino。
 // 改 kInspectMode 后，main 只加载对应配方并调用 cutdie::run。
 // 全部配方参数只在本文件设置，不使用命令行参数。
 
@@ -150,6 +150,35 @@ void apply_d2d_recipe(cutdie::Options& opt) {
     opt.defect.darkRegion.edgeMaxAspect = 2.8;
     opt.defect.darkRegion.edgeNearCut = 40;
     opt.defect.darkRegion.edgeBlackFrac = 0.70;
+}
+
+// 有图形晶圆：切割 die patch，用 OpenVINO YOLO26 语义分割推理。
+// 模型为 dynamic ONNX 转出的 best.xml，输入 [?,3,64,64]。
+void apply_yolo_openvino_recipe(cutdie::Options& opt) {
+    opt.mode = cutdie::InspectMode::YoloOpenVino;
+
+    opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-0804";
+    opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-0804/0804-slot1.png";
+    opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-0804/0804-slot1.xml";
+    opt.out.clear();
+    opt.patch_out.clear();
+    opt.resolution_um = 50.0;
+    opt.keep_skipped = false;
+    opt.recursive = false;
+    opt.overlay_preview_px = 8000;
+    opt.inspect = true;
+
+    opt.yolo_model = "C:/Users/aspiring135/Desktop/project/c3000/openvino/models/best.xml";
+    opt.yolo_device = "CPU";
+    opt.yolo_imgsz = 64;
+    opt.yolo_batch = 8;
+    opt.yolo_requests = 0;
+    opt.yolo_confidence = 0.25f;
+    opt.yolo_fp16 = true;
+    opt.yolo_throughput = false;
+
+    opt.eval_patch_dir.clear();
+    opt.eval_truth_dir.clear();
 }
 
 // 无图形晶圆：只切圆形 ROI，整圆送入 SingleDie。
@@ -308,13 +337,16 @@ int main() {
 
     try {
         // ========== 切换检出模式 ==========
-        // DieToDie : 切 die patch，相邻 die 比较（c3000 有图形晶圆）
-        // SingleDie: 切圆形 ROI，本片亮/暗检出（c3000-nopartern-wafer 无图形晶圆）
-        constexpr cutdie::InspectMode kInspectMode = cutdie::InspectMode::SingleDie;
+        // DieToDie    : 切 die patch，相邻 die 比较（c3000 有图形晶圆）
+        // YoloOpenVino: 切 die patch，OpenVINO YOLO26 语义分割（best.xml，64x64）
+        // SingleDie   : 切圆形 ROI，本片亮/暗检出（c3000-nopartern-wafer 无图形晶圆）
+        constexpr cutdie::InspectMode kInspectMode = cutdie::InspectMode::YoloOpenVino;
 
         cutdie::Options opt;
         if (kInspectMode == cutdie::InspectMode::SingleDie) {
             apply_singledie_recipe(opt);
+        } else if (kInspectMode == cutdie::InspectMode::YoloOpenVino) {
+            apply_yolo_openvino_recipe(opt);
         } else {
             apply_d2d_recipe(opt);
         }
