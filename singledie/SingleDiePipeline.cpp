@@ -252,15 +252,39 @@ InspectResult inspect_singledie(const Options& opt) {
         };
 
         const int inner_m = std::max(0, wp.isolatedInnerMargin);
-        auto near_rim = [&](const cv::Point2d& c) {
+        const int near_keep = std::max(0, wp.isolatedNearKeep);
+        const int far_m = std::max(0, wp.isolatedFarMargin);
+        auto rim_of = [&](const cv::Point2d& c) {
             const double dist = std::hypot(c.x - local_center.x, c.y - local_center.y);
-            return dist >= circle.radius - static_cast<double>(inner_m);
+            return circle.radius - dist;
+        };
+        auto near_rim = [&](const cv::Point2d& c) {
+            return rim_of(c) <= static_cast<double>(inner_m);
         };
 
         std::vector<DefectCandidate> whites = extractLargeWhiteRegions(roi, wp);
         for (const auto& w : whites) {
-            if (inner_m > 0 && w.area <= 4 && near_rim(w.centroid)) {
-                continue;
+            const double rim = rim_of(w.centroid);
+            if (near_keep > 0) {
+                // 1px 近/远分档：inner_m 只作用在面积 1，避免误删贴边 2px 真点。
+                if (w.area <= 1) {
+                    if (inner_m > 0 && rim <= static_cast<double>(inner_m)) {
+                        continue;
+                    }
+                    const bool keep_near = rim <= static_cast<double>(near_keep);
+                    const bool keep_far = far_m > 0 && rim >= static_cast<double>(far_m);
+                    if (!keep_near && !keep_far) {
+                        continue;
+                    }
+                }
+            } else {
+                if (inner_m > 0 && w.area <= 4 && near_rim(w.centroid)) {
+                    continue;
+                }
+                // nearKeep=0 时 farMargin 当作 1px 距边上限：丢掉片内深处 1px，保住顶部近边真点。
+                if (far_m > 0 && w.area <= 1 && rim >= static_cast<double>(far_m)) {
+                    continue;
+                }
             }
             add_white(w, true);
         }

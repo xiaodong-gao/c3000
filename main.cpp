@@ -156,10 +156,10 @@ void apply_d2d_recipe(cutdie::Options& opt) {
 void apply_singledie_recipe(cutdie::Options& opt) {
     opt.mode = cutdie::InspectMode::SingleDie;
 
-    opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-0804";
-    opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-0804/0804-slot3.png";
-    opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-0804/0804-slot3.xml";
-    opt.out = "C:/Users/aspiring135/Desktop/datasets/50um-0804";
+    opt.dir = "C:/Users/aspiring135/Desktop/datasets/50um-0810";
+    opt.image = "C:/Users/aspiring135/Desktop/datasets/50um-0810/0810-slot1.png";
+    opt.xml = "C:/Users/aspiring135/Desktop/datasets/50um-0810/0810-slot1.xml";
+    opt.out = "C:/Users/aspiring135/Desktop/datasets/50um-0810";
     opt.patch_out.clear();
     opt.resolution_um = 50.0;
     opt.keep_skipped = false;
@@ -233,14 +233,14 @@ void apply_singledie_recipe(cutdie::Options& opt) {
     opt.defect.filter.minMeanL2 = 14.0;
     opt.defect.filter.minAbsMeanSigned = 12.0;
 
-    // 0804-slot3 暗场小白点：左 3 / 右 4 / 下 10，共计 17。
-    // 阈值 50 抓住左侧浅点（峰值约 60）；maxArea 丢掉底部 notch（~900px）。
-    // 右侧 2 个真点贴边且面积<=4，不能开 isolatedInnerMargin。
+    // 0810-slot1 3 个小白点：顶部贴边 2x2 峰值 129，中间居上 3x3 峰值 255，底部 2x2 峰值 115。
+    // 阈值 70；minArea=2 丢掉片内 1px 假点；inner_m=5 丢掉亮环碎点，仍保住顶部 rim≈5.7。
+    // minFill=0.55 丢掉西侧贴边 5x3（fill≈0.53）。
     opt.defect.largeWhite.enable = true;
-    opt.defect.largeWhite.threshold = 50.0;
+    opt.defect.largeWhite.threshold = 70.0;
     opt.defect.largeWhite.minArea = 2;
     opt.defect.largeWhite.maxArea = 50;
-    opt.defect.largeWhite.minFill = 0.50;
+    opt.defect.largeWhite.minFill = 0.55;
     opt.defect.largeWhite.maxAspectRatio = 2.0;
     opt.defect.largeWhite.morphSize = 0;
     opt.defect.largeWhite.maxBackground = 0.0;
@@ -257,7 +257,9 @@ void apply_singledie_recipe(cutdie::Options& opt) {
     opt.defect.largeWhite.tophatMinPeak = 0.0;
     opt.defect.largeWhite.isolatedMaxArea = 0;
     opt.defect.largeWhite.isolatedThreshold = 0.0;
-    opt.defect.largeWhite.isolatedInnerMargin = 0;
+    opt.defect.largeWhite.isolatedInnerMargin = 5;
+    opt.defect.largeWhite.isolatedNearKeep = 0;
+    opt.defect.largeWhite.isolatedFarMargin = 0;
 
     opt.defect.darkRegion.enable = false;
     opt.defect.darkRegion.blackhatSize = 15;

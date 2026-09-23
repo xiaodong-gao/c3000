@@ -75,7 +75,9 @@ struct LargeWhiteParams {
     // 在未抠圆的原图上找，再与内缩圆相交。isolatedMaxArea<=0 关闭。
     int isolatedMaxArea = 0;
     double isolatedThreshold = 0.0;
-    int isolatedInnerMargin = 16;  // 只用于圆掩膜通路丢掉贴边假小点；孤立通路不内缩
+    int isolatedInnerMargin = 16;  // 圆掩膜通路丢掉贴边假小点；孤立通路不内缩
+    int isolatedNearKeep = 0;      // >0：面积 1 且距边<=此值保留（先过 inner_m）
+    int isolatedFarMargin = 0;     // nearKeep>0：1px 距边>=此值保留；nearKeep=0：1px 距边>=此值丢掉
 };
 
 struct DarkRegionParams {
