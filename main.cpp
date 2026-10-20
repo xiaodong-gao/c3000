@@ -194,13 +194,13 @@ void apply_d2d_recipe(cutdie::Options& opt) {
     opt.resolution_um = 46.0;
     opt.keep_skipped = false;
     opt.skip_inspect.clear();
-    // 只检出这些晶粒上的缺陷。
+    // 只检出这些晶粒。黑点走差分，白方块走 largeWhite。
     opt.inspect_only = {
-        {-10, -6}, {-11, -3}, {-11, -4}, {-14, 1}, {-14, 2}, {-14, 4},
+        {-10, -6}, {-11, -3}, {-11, -4}, {-13, 2}, {-14, 1}, {-14, 2}, {-14, 4},
         {-1, -5}, {-2, -13}, {-2, -4}, {-2, 2}, {-5, 12}, {0, -14}, {0, -7},
-        {10, 7}, {12, 2}, {13, -3}, {13, -4}, {13, 4}, {1, -14}, {1, 11}, {1, 4},
-        {2, -11}, {3, -3}, {3, -7}, {4, -1}, {5, -11}, {5, 5}, {6, 6}, {7, 11},
-        {8, -8}, {9, 2},
+        {10, 7}, {12, 2}, {13, -3}, {13, -2}, {13, -4}, {13, 2}, {13, 4},
+        {1, -14}, {1, 11}, {1, 4}, {2, -11}, {3, -3}, {3, -7}, {4, -1},
+        {5, -11}, {5, 5}, {6, 6}, {7, -2}, {7, 11}, {8, -8}, {9, 2},
     };
     opt.recursive = false;
     opt.overlay_preview_px = 8000;
@@ -215,9 +215,10 @@ void apply_d2d_recipe(cutdie::Options& opt) {
 
     apply_common_backend(opt);
 
+    // 黑点比底色暗大约 13～30。x7_y-2 的浅斑差分只有 13 左右。
     opt.defect.adaptive.blockSize = 31;
     opt.defect.adaptive.k = 2.5;
-    opt.defect.adaptive.minAbs = 12.0;
+    opt.defect.adaptive.minAbs = 11.0;
 
     opt.defect.signedDiff.T = 14.0;
     opt.defect.signedDiff.darkT = 10.0;
@@ -233,25 +234,27 @@ void apply_d2d_recipe(cutdie::Options& opt) {
     opt.defect.morph.removeNoiseSize = 0;
     opt.defect.morph.darkOpenSize = 0;
 
-    opt.defect.blob.minArea = 8;
+    // 黑点大约 12～250 px。x7_y-2 的浅斑面积约 13、差分约 13。
+    opt.defect.blob.minArea = 12;
     opt.defect.blob.maxArea = 800;
-    opt.defect.blob.minWidth = 3;
-    opt.defect.blob.minHeight = 3;
+    opt.defect.blob.minWidth = 4;
+    opt.defect.blob.minHeight = 4;
     opt.defect.blob.maxAspectRatio = 3.0;
-    opt.defect.blob.borderMargin = 2;
-    opt.defect.blob.borderStripAspect = 4.0;
-    opt.defect.blob.minBrightArea = 12;
+    opt.defect.blob.borderMargin = 6;
+    opt.defect.blob.borderStripAspect = 2.2;
+    opt.defect.blob.minBrightArea = 1000;
 
-    // 这批晶粒里既有浅黑点，也有小白点。大白块仍走 largeWhite。
-    opt.defect.filter.keepBright = true;
+    // 黑点走差分暗极性。亮极性关掉，网格小亮点不再报出。大白块另走 largeWhite。
+    opt.defect.filter.keepBright = false;
     opt.defect.filter.keepDark = true;
     opt.defect.filter.keepMixed = false;
     opt.defect.filter.keepUnknown = false;
-    opt.defect.filter.minMeanL2 = 14.0;
+    opt.defect.filter.minMeanL2 = 13.0;
     opt.defect.filter.minAbsMeanSigned = 12.0;
 
-    // 中心正方形约 107x105 到 131x105，长宽比约 1.25，面积约 10800。
-    // 贴边白条约 6–7。长宽比上限 2 只留正方形。
+    // 白色方块约 107x103 到 176x205，灰度约 254，面积约 10400～15500，长宽比约 1.0～1.5。
+    // x13_y2、x13_y-2、x-14_y2 的方块约 130x105。贴边白条长宽比约 6，这里丢掉。
+    // x13_y-3 的浅白点大约 10px、灰度 200 上下，走白帽，不并进大方块。
     opt.defect.largeWhite.enable = true;
     opt.defect.largeWhite.threshold = 236.0;
     opt.defect.largeWhite.minArea = 1000;
@@ -261,16 +264,16 @@ void apply_d2d_recipe(cutdie::Options& opt) {
     opt.defect.largeWhite.morphSize = 3;
     opt.defect.largeWhite.maxBackground = 0.0;
     opt.defect.largeWhite.backgroundMargin = 4;
-    opt.defect.largeWhite.tophatSize = 0;
-    opt.defect.largeWhite.tophatMin = 0.0;
-    opt.defect.largeWhite.tophatFloor = 0.0;
-    opt.defect.largeWhite.tophatMinArea = 0;
-    opt.defect.largeWhite.tophatMaxArea = 0;
-    opt.defect.largeWhite.tophatMinFill = 0.0;
-    opt.defect.largeWhite.tophatMaxAspect = 0.0;
-    opt.defect.largeWhite.tophatStreetBand = 0;
-    opt.defect.largeWhite.tophatBorderMargin = 0;
-    opt.defect.largeWhite.tophatMinPeak = 0.0;
+    opt.defect.largeWhite.tophatSize = 21;
+    opt.defect.largeWhite.tophatMin = 24.0;
+    opt.defect.largeWhite.tophatFloor = 220.0;
+    opt.defect.largeWhite.tophatMinArea = 24;
+    opt.defect.largeWhite.tophatMaxArea = 200;
+    opt.defect.largeWhite.tophatMinFill = 0.40;
+    opt.defect.largeWhite.tophatMaxAspect = 2.0;
+    opt.defect.largeWhite.tophatStreetBand = 10;
+    opt.defect.largeWhite.tophatBorderMargin = 6;
+    opt.defect.largeWhite.tophatMinPeak = 240.0;
     opt.defect.largeWhite.isolatedMaxArea = 0;
     opt.defect.largeWhite.isolatedThreshold = 0.0;
     opt.defect.largeWhite.isolatedInnerMargin = 16;
