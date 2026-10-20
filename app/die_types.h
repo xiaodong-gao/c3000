@@ -22,7 +22,7 @@ inline constexpr const char* kDefaultDir = "C:/Users/aspiring135/Desktop/dataset
 enum class AlignMethod { PhaseCuda, PhaseCpu, EccCuda, EccCpu };
 enum class HistogramMethod { Auto, Cpu, Cuda };
 enum class NormalizeMethod { Auto, Cpu, Cuda };
-enum class InspectMode { DieToDie, YoloOpenVino, SingleDie };
+enum class InspectMode { SingleDie,DieToDie, DieToDatabase, YoloOpenVino, AnomalibOpenVino};
 
 struct DieMap {
     double wafer_diameter = 0;
@@ -75,6 +75,10 @@ struct Options {
     fs::path xml;
     fs::path out;
     bool keep_skipped = false;
+    // 这些晶粒不检出。坐标与 patch 名 die_x*_y* 一致。
+    std::set<std::pair<int, int>> skip_inspect;
+    // 非空时只检出这些晶粒。
+    std::set<std::pair<int, int>> inspect_only;
     bool recursive = false;
     double resolution_um = 10.0;  // 每个像素对应多少微米 (um/px)
 
@@ -101,9 +105,10 @@ struct Options {
     DefectDetectParams defect;
     int overlay_preview_px = kDetectTarget;
 
-    // DieToDie：切 die patch，用邻居/外部模板做 D2D。
+    // DieToDie：切 die patch，用邻居 die 做 D2D。
+    // DieToDatabase：切 die patch，用一张参考 patch 模板做同样的对比。
     // YoloOpenVino：切 die patch，用 OpenVINO YOLO26 语义分割推理。
-    // SingleDie：只切对齐 XML 中的圆形 ROI，整圆直接走 singledie，不切 die patch。
+    // SingleDie：先按 XML 切并保存全部 die patch，再对圆形 ROI 做本片检出。
     InspectMode mode = InspectMode::DieToDie;
 
     // YoloOpenVino：best.xml 由 dynamic ONNX 转出，输入 [?,3,64,64]，语义分割。

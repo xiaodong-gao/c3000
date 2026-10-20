@@ -1,4 +1,4 @@
-#include "Pipeline.hpp"
+#include "Die2DiePipeline.hpp"
 
 #include "EccAlign.hpp"
 #include "IntensityNormalize.h"

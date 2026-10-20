@@ -3,6 +3,7 @@
 #include "die_cut.h"
 #include "die_inspect.h"
 #include "die_util.h"
+#include "DieToDatabase.h"
 #include "SingleDiePipeline.h"
 #include "openvino_yolo26.hpp"
 
@@ -142,10 +143,6 @@ void resolve_job_outputs(Options& one, const Options& opt, const Job& job, size_
     one.image = job.image;
     one.xml = job.xml;
     one.out = job.out;
-    if (opt.mode == InspectMode::SingleDie) {
-        one.patch_out.clear();
-        return;
-    }
     if (!opt.patch_out.empty()) {
         one.patch_out = job_count == 1 ? opt.patch_out : (opt.patch_out / job.name);
     } else {
@@ -256,6 +253,8 @@ int run(Options opt) {
     const char* mode_name = "Die-to-Die";
     if (opt.mode == InspectMode::SingleDie) {
         mode_name = "Single Die";
+    } else if (opt.mode == InspectMode::DieToDatabase) {
+        mode_name = "Die-to-Database";
     } else if (opt.mode == InspectMode::YoloOpenVino) {
         mode_name = "yolo-openvino";
     }
@@ -272,8 +271,27 @@ int run(Options opt) {
         std::cout << "  输出: " << one.out.string() << '\n';
         try {
             if (one.mode == InspectMode::SingleDie) {
-                std::cout << "  链路: 只切圆形 ROI -> SingleDie（不切 patch）\n";
+                std::cout << "  链路: 切 die patch -> SingleDie 圆形 ROI\n";
+                std::cout << "  输出 patches: " << one.patch_out.string() << '\n';
+                const CutResult cut = cut_patches(one, resolution_um);
+                if (cut.saved <= 0) {
+                    throw std::runtime_error("没有可保存的 die patch");
+                }
                 inspect_singledie(one);
+                continue;
+            }
+            if (one.mode == InspectMode::DieToDatabase) {
+                std::cout << "  链路: 切 die patch -> 参考 patch 模板对比\n";
+                std::cout << "  输出 patches: " << one.patch_out.string() << '\n';
+                if (one.template_path.empty()) {
+                    throw std::runtime_error("DieToDatabase 未指定参考 patch 模板");
+                }
+                const CutResult cut = cut_patches(one, resolution_um);
+                if (cut.saved <= 0) {
+                    throw std::runtime_error("没有可对比的 die patch");
+                }
+                std::cout << "  参考模板: " << one.template_path.string() << '\n';
+                inspect_die_to_database(one, cut);
                 continue;
             }
             if (one.mode == InspectMode::YoloOpenVino) {

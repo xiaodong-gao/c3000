@@ -73,8 +73,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <OpenCVRoot>C:\development\opencv-4.14.0-windows\build</OpenCVRoot>
-    <OpenVINORoot>$(ProjectDir)openvino\openvino_toolkit_windows_2026.3.1.22476.56d9685302d_x86_64\openvino_toolkit_windows_2026.3.1.22476.56d9685302d_x86_64\</OpenVINORoot>
-    <IncludePathList>$(ProjectDir);$(ProjectDir)app;$(ProjectDir)die2die;$(ProjectDir)ams;$(ProjectDir)utils;$(ProjectDir)singledie;$(ProjectDir)yolo</IncludePathList>
+    <OpenVINORoot>C:\Users\aspiring135\Desktop\project\openvino\openvino_toolkit_windows_2026.3.1.22476.56d9685302d_x86_64\openvino_toolkit_windows_2026.3.1.22476.56d9685302d_x86_64\</OpenVINORoot>
+    <IncludePathList>$(ProjectDir);$(ProjectDir)app;$(ProjectDir)die2die;$(ProjectDir)die2database;$(ProjectDir)ams;$(ProjectDir)utils;$(ProjectDir)singledie;$(ProjectDir)yolo</IncludePathList>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -189,6 +189,9 @@ xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command
     <Filter Include="yolo">
       <UniqueIdentifier>{F6A7B8C9-D0E1-2345-F012-456789012345}</UniqueIdentifier>
     </Filter>
+    <Filter Include="die2database">
+      <UniqueIdentifier>{A7B8C9D0-E1F2-3456-0123-567890ABCDEF}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -212,7 +215,7 @@ xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command
       <Filter>die2die</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="die2die\Pipeline.cpp">
+    <ClCompile Include="die2die\Die2DiePipeline.cpp">
       <Filter>die2die</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
@@ -252,6 +255,14 @@ xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command
       <Filter>yolo</Filter>
       <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="die2database\Die2DatabasePipeline.cpp">
+      <Filter>die2database</Filter>
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="die2database\DieToDatabase.cpp">
+      <Filter>die2database</Filter>
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="app\die_app.h">
@@ -272,10 +283,11 @@ xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command
     <ClInclude Include="app\die_util.h">
       <Filter>app</Filter>
     </ClInclude>
+    <ClInclude Include="app\json.hpp" />
     <ClInclude Include="die2die\DefectDetect.hpp">
       <Filter>die2die</Filter>
     </ClInclude>
-    <ClInclude Include="die2die\Pipeline.hpp">
+    <ClInclude Include="die2die\Die2DiePipeline.hpp">
       <Filter>die2die</Filter>
     </ClInclude>
     <ClInclude Include="ams\EccAlign.hpp">
@@ -316,6 +328,12 @@ xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command
     </ClInclude>
     <ClInclude Include="yolo\openvino_yolo26.hpp">
       <Filter>yolo</Filter>
+    </ClInclude>
+    <ClInclude Include="die2database\Die2DatabasePipeline.h">
+      <Filter>die2database</Filter>
+    </ClInclude>
+    <ClInclude Include="die2database\DieToDatabase.h">
+      <Filter>die2database</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

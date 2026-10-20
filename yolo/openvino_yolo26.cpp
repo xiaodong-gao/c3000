@@ -743,7 +743,8 @@ int run(Task task, const Defaults& defaults) {
         ov::Core core;
         // mmap + VS debugger first-chance AVs inside CPU JIT (unknown addresses, no PDB).
         core.set_property(ov::enable_mmap(false));
-        const fs::path project_root = fs::absolute(options.model).parent_path().parent_path().parent_path();
+        // models/best.xml -> <project>/openvino_cache/{Debug|Release}
+        const fs::path project_root = fs::absolute(options.model).parent_path().parent_path();
 #ifdef _DEBUG
         const fs::path cache_dir = project_root / "openvino_cache" / "Debug";
 #else

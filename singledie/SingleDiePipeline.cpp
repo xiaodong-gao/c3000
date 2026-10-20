@@ -462,10 +462,14 @@ InspectResult inspect_singledie(const Options& opt) {
             continue;
         }
         cv::Mat view = roi_bgr(crop_box).clone();
-        cv::Rect local(d.bbox.x - crop_box.x, d.bbox.y - crop_box.y, d.bbox.width, d.bbox.height);
-        local &= cv::Rect(0, 0, view.cols, view.rows);
-        if (local.area() > 0) {
-            cv::rectangle(view, local, cv::Scalar(0, 0, 255), 2);
+        const cv::Rect view_bounds(0, 0, view.cols, view.rows);
+        for (const auto& other : result.defects) {
+            cv::Rect local(other.bbox.x - crop_box.x, other.bbox.y - crop_box.y, other.bbox.width,
+                           other.bbox.height);
+            local &= view_bounds;
+            if (local.area() > 0) {
+                cv::rectangle(view, local, cv::Scalar(0, 0, 255), 2);
+            }
         }
         std::ostringstream name;
         name << "defect_" << std::setfill('0') << std::setw(2) << d.id << ".png";

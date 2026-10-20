@@ -7,7 +7,7 @@
 #include "IntensityNormalize.cuh"
 #include "PhaseCorrelate.hpp"
 #include "PhaseCorrelate.cuh"
-#include "Pipeline.hpp"
+#include "Die2DiePipeline.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -536,6 +536,14 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
             ++result.skipped_die;
             continue;
         }
+        if (opt.skip_inspect.count({box.x_idx, box.y_idx}) > 0) {
+            ++result.skipped_die;
+            continue;
+        }
+        if (!opt.inspect_only.empty() && opt.inspect_only.count({box.x_idx, box.y_idx}) == 0) {
+            ++result.skipped_die;
+            continue;
+        }
 
         cv::Rect crop;
         cv::Mat data = crop_die(cut.full, box, crop);
@@ -649,6 +657,26 @@ InspectResult inspect_wafer(const Options& opt, const CutResult& cut, const Temp
                 if (!overlap) {
                     crop_cands.push_back(w);
                 }
+            }
+        }
+        // 大白块会把邻片差分带偏，同颗上的小亮点是过检。暗点仍保留。
+        if (opt.defect.largeWhite.enable && opt.defect.largeWhite.minArea > 0) {
+            bool hasLargeWhite = false;
+            for (const auto& c : crop_cands) {
+                if (c.polarity == DefectPolarity::Bright && c.area >= opt.defect.largeWhite.minArea) {
+                    hasLargeWhite = true;
+                    break;
+                }
+            }
+            if (hasLargeWhite) {
+                std::vector<DefectCandidate> keep;
+                for (const auto& c : crop_cands) {
+                    if (c.polarity == DefectPolarity::Dark ||
+                        (c.polarity == DefectPolarity::Bright && c.area >= opt.defect.largeWhite.minArea)) {
+                        keep.push_back(c);
+                    }
+                }
+                crop_cands.swap(keep);
             }
         }
         int rec_id = 0;
