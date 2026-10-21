@@ -99,7 +99,7 @@ struct Options {
     fs::path eval_patch_dir;
     fs::path eval_truth_dir;
 
-    // 检出配方。默认值与各模块原参数一致，实际以 main 中赋值为准。
+    // 检出配方。SingleDie / DieToDie / DieToDatabase 以 recipes/*.json 为准。
     HistogramThresholdParams histogram = histogramThresholdDefaultParams();
     EccAlignParams ecc;
     DefectDetectParams defect;

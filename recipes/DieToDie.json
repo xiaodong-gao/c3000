@@ -1,0 +1,151 @@
+// 有图形晶圆：切割 die patch，用相邻 die 做 Die-to-Die。
+// 黑点走差分暗极性，白方块走 largeWhite。网格小亮点不报。
+{
+  "mode": "DieToDie",
+  "dir": "C:/Users/aspiring135/Desktop/datasets/46um-gray",
+  "image": "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046.png",
+  "xml": "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046.xml",
+  "out": "C:/Users/aspiring135/Desktop/datasets/46um-gray/0046-DieToDie",
+  "patch_out": "",
+  "resolution_um": 46.0,
+  "keep_skipped": false,
+  "skip_inspect": [],
+  "inspect_only": [
+    [-10, -6], [-11, -3], [-11, -4], [-13, 2], [-14, 1], [-14, 2], [-14, 4],
+    [-1, -5], [-2, -13], [-2, -4], [-2, 2], [-5, 12], [0, -14], [0, -7],
+    [10, 7], [12, 2], [13, -3], [13, -2], [13, -4], [13, 2], [13, 4],
+    [1, -14], [1, 11], [1, 4], [2, -11], [3, -3], [3, -7], [4, -1],
+    [5, -11], [5, 5], [6, 6], [7, -2], [7, 11], [8, -8], [9, 2]
+  ],
+  "recursive": false,
+  "overlay_preview_px": 8000,
+  "template_path": "",
+  "template_neighbor": true,
+  "template_neighbor_min": 1,
+  "inspect": true,
+  "eval_patch_dir": "",
+  "eval_truth_dir": "",
+  "align_method": "PhaseCpu",
+  "histogram_method": "Cpu",
+  "normalize_method": "Cpu",
+  "histogram": {
+    "gaussianSigma": 2.5,
+    "peakHeightRatio": 0.05,
+    "minPeakDistance": 15,
+    "minPeakCountRatio": 0.005,
+    "defaultThreshold": 125
+  },
+  "ecc": {
+    "maxIters": 8,
+    "eps": 1e-5,
+    "gaussFiltSize": 3,
+    "motionType": "EUCLIDEAN"
+  },
+  "defect": {
+    "adaptive": {
+      "blockSize": 31,
+      "k": 2.5,
+      "minAbs": 11.0
+    },
+    "signedDiff": {
+      "T": 14.0,
+      "darkT": 10.0
+    },
+    "darkSpot": {
+      "enableBlackHat": true,
+      "kernel": 15,
+      "minResponse": 12.0
+    },
+    "morph": {
+      "openSize": 0,
+      "closeSize": 0,
+      "dilateSize": 0,
+      "erodeSize": 0,
+      "removeNoiseSize": 0,
+      "darkOpenSize": 0
+    },
+    "blob": {
+      "minArea": 12,
+      "maxArea": 800,
+      "minWidth": 4,
+      "minHeight": 4,
+      "maxAspectRatio": 3.0,
+      "borderMargin": 6,
+      "borderStripAspect": 2.2,
+      "minBrightArea": 1000
+    },
+    "filter": {
+      "keepBright": false,
+      "keepDark": true,
+      "keepMixed": false,
+      "keepUnknown": false,
+      "minMeanL2": 13.0,
+      "minAbsMeanSigned": 12.0
+    },
+    // 白色方块约 107x103 到 176x205。贴边白条长宽比约 6，maxAspectRatio=2 丢掉。
+    // 浅白点大约 10px、灰度 200 上下，走白帽，不并进大方块。
+    "largeWhite": {
+      "enable": true,
+      "threshold": 236.0,
+      "minArea": 1000,
+      "maxArea": 20000,
+      "minFill": 0.35,
+      "maxAspectRatio": 2.0,
+      "morphSize": 3,
+      "maxBackground": 0.0,
+      "backgroundMargin": 4,
+      "tophatSize": 21,
+      "tophatMin": 24.0,
+      "tophatFloor": 220.0,
+      "tophatMinArea": 24,
+      "tophatMaxArea": 200,
+      "tophatMinFill": 0.40,
+      "tophatMaxAspect": 2.0,
+      "tophatStreetBand": 10,
+      "tophatBorderMargin": 6,
+      "tophatMinPeak": 240.0,
+      "isolatedMaxArea": 0,
+      "isolatedThreshold": 0.0,
+      "isolatedInnerMargin": 16,
+      "isolatedNearKeep": 0,
+      "isolatedFarMargin": 0
+    },
+    "darkRegion": {
+      "enable": false,
+      "blackhatSize": 15,
+      "blackhatMin": 16.0,
+      "belowMedian": 16.0,
+      "grayMin": 90.0,
+      "grayMax": 220.0,
+      "minArea": 16,
+      "maxArea": 180,
+      "minFill": 0.40,
+      "maxAspectRatio": 2.2,
+      "closeSize": 3,
+      "faintBlackhatMin": 14.0,
+      "faintBelowMedian": 10.0,
+      "faintMinArea": 48,
+      "faintMinFill": 0.42,
+      "faintMaxAspect": 2.0,
+      "streetBand": 8,
+      "borderMargin": 6,
+      "faintSmallMinArea": 19,
+      "faintSmallMaxArea": 21,
+      "faintSmallMinFill": 0.40,
+      "faintSmallMaxAspect": 2.0,
+      "faintSmallHatMin": 24.0,
+      "edgeBrightMin": 2500,
+      "edgeDarkMin": 2000,
+      "edgeGrayMin": 90.0,
+      "edgeGrayMax": 220.0,
+      "edgeBlackhatMin": 16.0,
+      "edgeBelowMedian": 10.0,
+      "edgeMinArea": 10,
+      "edgeMaxArea": 120,
+      "edgeMinFill": 0.34,
+      "edgeMaxAspect": 2.8,
+      "edgeNearCut": 40,
+      "edgeBlackFrac": 0.70
+    }
+  }
+}

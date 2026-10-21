@@ -19,12 +19,18 @@
     <Filter Include="yolo">
       <UniqueIdentifier>{F6A7B8C9-D0E1-2345-F012-456789012345}</UniqueIdentifier>
     </Filter>
+    <Filter Include="recipes">
+      <UniqueIdentifier>{C8E1A4B2-7F30-4D11-9A6E-1B2C3D4E5F60}</UniqueIdentifier>
+    </Filter>
     <Filter Include="die2database">
       <UniqueIdentifier>{786aedd9-b870-4ad0-ad47-dbf639eb0713}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="app\recipe_json.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
     <ClCompile Include="app\die_app.cpp">
       <Filter>app</Filter>
     </ClCompile>
@@ -153,8 +159,20 @@
     <ClInclude Include="app\json.hpp">
       <Filter>app</Filter>
     </ClInclude>
+    <ClInclude Include="app\recipe_json.h">
+      <Filter>app</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <None Include="recipes\SingleDie.json">
+      <Filter>recipes</Filter>
+    </None>
+    <None Include="recipes\DieToDie.json">
+      <Filter>recipes</Filter>
+    </None>
+    <None Include="recipes\DieToDatabase.json">
+      <Filter>recipes</Filter>
+    </None>
     <CudaCompile Include="ams\EccAlign.cu">
       <Filter>ams</Filter>
     </CudaCompile>

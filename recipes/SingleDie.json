@@ -1,0 +1,178 @@
+// 无图形晶圆：按 XML 切并保存全部 die patch，再对圆形 ROI 做本片检出。
+// 亮/暗残差关掉，只走 largeWhite 抓贴边小白点。
+{
+  "mode": "SingleDie",
+  "dir": "C:/Users/aspiring135/Desktop/datasets/50um-20261009",
+  "image": "C:/Users/aspiring135/Desktop/datasets/50um-20261009/0907_PW_slot2.png",
+  "xml": "C:/Users/aspiring135/Desktop/datasets/50um-20261009/0907_PW_slot2.xml",
+  "out": "C:/Users/aspiring135/Desktop/datasets/50um-20261009",
+  "patch_out": "",
+  "resolution_um": 50.0,
+  "keep_skipped": false,
+  "skip_inspect": [],
+  "inspect_only": [],
+  "recursive": false,
+  "overlay_preview_px": 8000,
+  "template_path": "",
+  "template_neighbor": false,
+  "template_neighbor_min": 1,
+  "inspect": true,
+  "eval_patch_dir": "",
+  "eval_truth_dir": "",
+  "align_method": "PhaseCpu",
+  "histogram_method": "Cpu",
+  "normalize_method": "Cpu",
+  "histogram": {
+    "gaussianSigma": 2.5,
+    "peakHeightRatio": 0.05,
+    "minPeakDistance": 15,
+    "minPeakCountRatio": 0.005,
+    "defaultThreshold": 125
+  },
+  "ecc": {
+    "maxIters": 8,
+    "eps": 1e-5,
+    "gaussFiltSize": 3,
+    "motionType": "EUCLIDEAN"
+  },
+  "singledie_normalize": {
+    "background": {
+      "method": "Gaussian",
+      "kernelSize": 201,
+      "sigma": 0.0
+    },
+    "method": "Divide",
+    "minBackground": 1e-6,
+    "robustPercentile": true,
+    "lowPercentile": 1.0,
+    "highPercentile": 99.0,
+    "subtractCenter": 0.5
+  },
+  "singledie_detect": {
+    "brightThreshold": 0.025,
+    "darkThreshold": 0.025,
+    "morphologyKernel": 3,
+    "openIterations": 0,
+    "closeIterations": 1,
+    "minArea": 1,
+    "maxArea": 10000000,
+    "borderMargin": 0,
+    "enableBright": false,
+    "enableDark": false,
+    "keepResponseMaps": false,
+    "enableBlob": false,
+    "useAbsoluteBright": false,
+    "maxAspectRatio": 0.0,
+    "minFillRatio": 0.0,
+    "normalReference": 1.0
+  },
+  "defect": {
+    "adaptive": {
+      "blockSize": 31,
+      "k": 4.0,
+      "minAbs": 18.0
+    },
+    "signedDiff": {
+      "T": 16.0,
+      "darkT": 14.0
+    },
+    "darkSpot": {
+      "enableBlackHat": true,
+      "kernel": 15,
+      "minResponse": 12.0
+    },
+    "morph": {
+      "openSize": 0,
+      "closeSize": 3,
+      "dilateSize": 0,
+      "erodeSize": 0,
+      "removeNoiseSize": 0,
+      "darkOpenSize": 0
+    },
+    "blob": {
+      "minArea": 8,
+      "maxArea": 250,
+      "minWidth": 3,
+      "minHeight": 3,
+      "maxAspectRatio": 4.0,
+      "borderMargin": 4,
+      "borderStripAspect": 2.5,
+      "minBrightArea": 400
+    },
+    "filter": {
+      "keepBright": false,
+      "keepDark": false,
+      "keepMixed": false,
+      "keepUnknown": false,
+      "minMeanL2": 14.0,
+      "minAbsMeanSigned": 12.0
+    },
+    // 阈值 70。minArea=1 保留暗底上只有中心超过阈值的小白点。
+    // maxArea=3000、maxAspectRatio=50：收下顶部整段亮带。
+    // minFill=0.33：斜向小白点串填充率约 0.33～0.53。
+    // isolatedInnerMargin=0：贴边 1～4px 的小白点也保留。
+    "largeWhite": {
+      "enable": true,
+      "threshold": 70.0,
+      "minArea": 1,
+      "maxArea": 3000,
+      "minFill": 0.33,
+      "maxAspectRatio": 50.0,
+      "morphSize": 0,
+      "maxBackground": 0.0,
+      "backgroundMargin": 4,
+      "tophatSize": 0,
+      "tophatMin": 0.0,
+      "tophatFloor": 0.0,
+      "tophatMinArea": 0,
+      "tophatMaxArea": 0,
+      "tophatMinFill": 0.0,
+      "tophatMaxAspect": 0.0,
+      "tophatStreetBand": 0,
+      "tophatBorderMargin": 0,
+      "tophatMinPeak": 0.0,
+      "isolatedMaxArea": 0,
+      "isolatedThreshold": 0.0,
+      "isolatedInnerMargin": 0,
+      "isolatedNearKeep": 0,
+      "isolatedFarMargin": 0
+    },
+    "darkRegion": {
+      "enable": false,
+      "blackhatSize": 15,
+      "blackhatMin": 16.0,
+      "belowMedian": 16.0,
+      "grayMin": 90.0,
+      "grayMax": 220.0,
+      "minArea": 16,
+      "maxArea": 180,
+      "minFill": 0.40,
+      "maxAspectRatio": 2.2,
+      "closeSize": 3,
+      "faintBlackhatMin": 14.0,
+      "faintBelowMedian": 10.0,
+      "faintMinArea": 48,
+      "faintMinFill": 0.42,
+      "faintMaxAspect": 2.0,
+      "streetBand": 8,
+      "borderMargin": 6,
+      "faintSmallMinArea": 19,
+      "faintSmallMaxArea": 21,
+      "faintSmallMinFill": 0.40,
+      "faintSmallMaxAspect": 2.0,
+      "faintSmallHatMin": 24.0,
+      "edgeBrightMin": 2500,
+      "edgeDarkMin": 2000,
+      "edgeGrayMin": 90.0,
+      "edgeGrayMax": 220.0,
+      "edgeBlackhatMin": 16.0,
+      "edgeBelowMedian": 10.0,
+      "edgeMinArea": 10,
+      "edgeMaxArea": 120,
+      "edgeMinFill": 0.34,
+      "edgeMaxAspect": 2.8,
+      "edgeNearCut": 40,
+      "edgeBlackFrac": 0.70
+    }
+  }
+}

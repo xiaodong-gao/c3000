@@ -1,0 +1,149 @@
+// 切 die patch 后，用一张参考 patch 和每颗 patch 对比。
+// 暗斑、亮斑走差分，大白块另走 largeWhite。参考图放在 patches 目录外。
+{
+  "mode": "DieToDatabase",
+  "dir": "C:/Users/aspiring135/Desktop/datasets/50um-gray",
+  "image": "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050.png",
+  "xml": "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050.xml",
+  "out": "C:/Users/aspiring135/Desktop/datasets/50um-gray/0050-DieToDatabase",
+  "patch_out": "",
+  "resolution_um": 50.0,
+  "keep_skipped": false,
+  "skip_inspect": [
+    [6, 12], [6, -12], [-7, 12], [-7, -12], [-14, -2],
+    [1, 7], [7, 6], [7, 7], [-10, 2],
+    [-3, 1], [-3, 4], [-3, 12], [3, 13], [10, 6], [-11, 4]
+  ],
+  "inspect_only": [],
+  "recursive": false,
+  "overlay_preview_px": 8000,
+  "template_path": "C:/Users/aspiring135/Desktop/datasets/50um-gray/reference.png",
+  "template_neighbor": false,
+  "template_neighbor_min": 1,
+  "inspect": true,
+  "eval_patch_dir": "",
+  "eval_truth_dir": "",
+  "align_method": "PhaseCpu",
+  "histogram_method": "Cpu",
+  "normalize_method": "Cpu",
+  "histogram": {
+    "gaussianSigma": 2.5,
+    "peakHeightRatio": 0.05,
+    "minPeakDistance": 15,
+    "minPeakCountRatio": 0.005,
+    "defaultThreshold": 125
+  },
+  "ecc": {
+    "maxIters": 8,
+    "eps": 1e-5,
+    "gaussFiltSize": 3,
+    "motionType": "EUCLIDEAN"
+  },
+  "defect": {
+    "adaptive": {
+      "blockSize": 31,
+      "k": 2.5,
+      "minAbs": 16.0
+    },
+    "signedDiff": {
+      "T": 16.0,
+      "darkT": 16.0
+    },
+    "darkSpot": {
+      "enableBlackHat": false,
+      "kernel": 15,
+      "minResponse": 16.0
+    },
+    "morph": {
+      "openSize": 0,
+      "closeSize": 0,
+      "dilateSize": 0,
+      "erodeSize": 0,
+      "removeNoiseSize": 0,
+      "darkOpenSize": 0
+    },
+    "blob": {
+      "minArea": 17,
+      "maxArea": 2000,
+      "minWidth": 4,
+      "minHeight": 4,
+      "maxAspectRatio": 2.6,
+      "borderMargin": 4,
+      "borderStripAspect": 3.0,
+      "minBrightArea": 0
+    },
+    "filter": {
+      "keepBright": false,
+      "keepDark": true,
+      "keepMixed": false,
+      "keepUnknown": false,
+      "minMeanL2": 16.0,
+      "minAbsMeanSigned": 14.0
+    },
+    // 晶粒底色大约 150，阈值必须高于底色。长宽比上限 2 只留正方形。
+    "largeWhite": {
+      "enable": true,
+      "threshold": 236.0,
+      "minArea": 1000,
+      "maxArea": 20000,
+      "minFill": 0.35,
+      "maxAspectRatio": 2.0,
+      "morphSize": 3,
+      "maxBackground": 0.0,
+      "backgroundMargin": 4,
+      "tophatSize": 0,
+      "tophatMin": 0.0,
+      "tophatFloor": 0.0,
+      "tophatMinArea": 0,
+      "tophatMaxArea": 0,
+      "tophatMinFill": 0.0,
+      "tophatMaxAspect": 0.0,
+      "tophatStreetBand": 0,
+      "tophatBorderMargin": 0,
+      "tophatMinPeak": 0.0,
+      "isolatedMaxArea": 0,
+      "isolatedThreshold": 0.0,
+      "isolatedInnerMargin": 16,
+      "isolatedNearKeep": 0,
+      "isolatedFarMargin": 0
+    },
+    // 原配方只关闭本通路，其余保持结构体默认值。enable 为 false 时不生效。
+    "darkRegion": {
+      "enable": false,
+      "blackhatSize": 15,
+      "blackhatMin": 18.0,
+      "belowMedian": 16.0,
+      "grayMin": 50.0,
+      "grayMax": 220.0,
+      "minArea": 16,
+      "maxArea": 180,
+      "minFill": 0.30,
+      "maxAspectRatio": 3.5,
+      "closeSize": 0,
+      "faintBlackhatMin": 0.0,
+      "faintBelowMedian": 0.0,
+      "faintMinArea": 48,
+      "faintMinFill": 0.50,
+      "faintMaxAspect": 1.7,
+      "streetBand": 0,
+      "borderMargin": 0,
+      "faintSmallMinArea": 0,
+      "faintSmallMaxArea": 47,
+      "faintSmallMinFill": 0.36,
+      "faintSmallMaxAspect": 2.4,
+      "faintSmallHatMin": 0.0,
+      "edgeBrightMin": 0,
+      "edgeDarkMin": 0,
+      "edgeGrayMin": 90.0,
+      "edgeGrayMax": 220.0,
+      "edgeBlackhatMin": 14.0,
+      "edgeBelowMedian": 10.0,
+      "edgeMinArea": 0,
+      "edgeMaxArea": 150,
+      "edgeMinFill": 0.30,
+      "edgeMaxAspect": 3.5,
+      "edgeNearCut": 0,
+      "edgeBlackFrac": 0.65
+    }
+  }
+}

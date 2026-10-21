@@ -135,7 +135,8 @@
     <PostBuildEvent>
       <Command>copy /Y "$(OpenCVRoot)\x64\vc16\bin\opencv_world4140d.dll" "$(OutDir)"
 xcopy /Y /Q "$(OpenVINORoot)runtime\bin\intel64\Debug\*.dll" "$(OutDir)"
-xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command>
+xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"
+xcopy /Y /I /Q "$(ProjectDir)recipes\*.json" "$(OutDir)recipes\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -167,7 +168,8 @@ xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command
     <PostBuildEvent>
       <Command>copy /Y "$(OpenCVRoot)\x64\vc16\bin\opencv_world4140.dll" "$(OutDir)"
 xcopy /Y /Q "$(OpenVINORoot)runtime\bin\intel64\Release\*.dll" "$(OutDir)"
-xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command>
+xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"
+xcopy /Y /I /Q "$(ProjectDir)recipes\*.json" "$(OutDir)recipes\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -195,6 +197,9 @@ xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="app\recipe_json.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
     <ClCompile Include="app\die_app.cpp">
       <Filter>app</Filter>
     </ClCompile>
@@ -284,6 +289,9 @@ xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command
       <Filter>app</Filter>
     </ClInclude>
     <ClInclude Include="app\json.hpp" />
+    <ClInclude Include="app\recipe_json.h">
+      <Filter>app</Filter>
+    </ClInclude>
     <ClInclude Include="die2die\DefectDetect.hpp">
       <Filter>die2die</Filter>
     </ClInclude>
@@ -335,6 +343,11 @@ xcopy /Y /Q "$(OpenVINORoot)runtime\3rdparty\tbb\bin\*.dll" "$(OutDir)"</Command
     <ClInclude Include="die2database\DieToDatabase.h">
       <Filter>die2database</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="recipes\SingleDie.json" />
+    <None Include="recipes\DieToDie.json" />
+    <None Include="recipes\DieToDatabase.json" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="ams\EccAlign.cu">
